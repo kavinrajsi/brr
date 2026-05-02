@@ -1,28 +1,13 @@
-import { getUserFromRequest, getAdminClient } from '@/lib/supabase-server'
-import { rateLimiter } from '@/lib/rate-limiter'
-
-function applyRateLimit(req, limit, windowMs) {
-  const clientId =
-    req.headers.get('x-forwarded-for') ||
-    req.headers.get('x-real-ip') ||
-    req.headers.get('Authorization') ||
-    'anonymous'
-
-  if (!rateLimiter.isAllowed(clientId, limit, windowMs)) {
-    return Response.json(
-      { error: 'Too many requests', retryAfter: Math.ceil(windowMs / 1000) },
-      { status: 429, headers: { 'Retry-After': String(Math.ceil(windowMs / 1000)) } }
-    )
-  }
-  return null
-}
+import { getUserFromRequest, getAdminClient, dbError } from '@/lib/supabase-server'
+import { checkRateLimit } from '@/lib/rate-limiter'
+import { getUserPlanLimits } from '@/lib/stripe'
 
 export async function GET(req) {
-  const limited = applyRateLimit(req, 100, 60000)
-  if (limited) return limited
-
   const user = await getUserFromRequest(req)
   if (!user) return Response.json({ error: 'Unauthorized' }, { status: 401 })
+
+  const limited = checkRateLimit(user.id, 100, 60000)
+  if (limited) return limited
 
   const url = new URL(req.url)
   const page = Math.max(1, parseInt(url.searchParams.get('page')) || 1)
@@ -37,7 +22,7 @@ export async function GET(req) {
     .order('created_at', { ascending: false })
     .range(offset, offset + limit - 1)
 
-  if (error) return Response.json({ error: error.message }, { status: 400 })
+  if (error) return dbError(error)
 
   return Response.json(
     { data, pagination: { total: count, page, limit, pages: Math.ceil(count / limit) } },
@@ -46,11 +31,11 @@ export async function GET(req) {
 }
 
 export async function POST(req) {
-  const limited = applyRateLimit(req, 30, 60000)
-  if (limited) return limited
-
   const user = await getUserFromRequest(req)
   if (!user) return Response.json({ error: 'Unauthorized' }, { status: 401 })
+
+  const limited = checkRateLimit(user.id, 30, 60000)
+  if (limited) return limited
 
   const body = await req.json()
   if (!body.name?.trim()) {
@@ -58,6 +43,19 @@ export async function POST(req) {
   }
 
   const supabase = getAdminClient()
+
+  const [limits, { count: brandCount }] = await Promise.all([
+    getUserPlanLimits(user.id, supabase),
+    supabase.from('brands').select('*', { count: 'exact', head: true }).eq('user_id', user.id),
+  ])
+
+  if (brandCount >= limits.brands) {
+    return Response.json(
+      { error: `Brand limit reached. Upgrade your plan to create more brands.` },
+      { status: 403 }
+    )
+  }
+
   const { data, error } = await supabase
     .from('brands')
     .insert([{
@@ -70,6 +68,6 @@ export async function POST(req) {
     .select()
     .single()
 
-  if (error) return Response.json({ error: error.message }, { status: 400 })
+  if (error) return dbError(error)
   return Response.json(data, { status: 201 })
 }

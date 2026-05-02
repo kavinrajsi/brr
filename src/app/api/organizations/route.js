@@ -1,17 +1,21 @@
-import { getUserFromRequest, getAdminClient } from '@/lib/supabase-server'
+import { getUserFromRequest, getAdminClient, dbError } from '@/lib/supabase-server'
 import { logAuditAction } from '@/lib/permissions'
+import { checkRateLimit } from '@/lib/rate-limiter'
 
 export async function GET(req) {
   const user = await getUserFromRequest(req)
   if (!user) return Response.json({ error: 'Unauthorized' }, { status: 401 })
 
+  const limited = checkRateLimit(user.id, 100, 60000)
+  if (limited) return limited
+
   const supabase = getAdminClient()
-  const { data: memberships, error: mErr } = await supabase
+  const { data: memberships, error } = await supabase
     .from('organization_members')
     .select('role, organizations(id, name, slug, logo_url, plan, created_at)')
     .eq('user_id', user.id)
 
-  if (mErr) return Response.json({ error: mErr.message }, { status: 400 })
+  if (error) return dbError(error)
 
   const organizations = (memberships ?? []).map(m => ({ ...m.organizations, role: m.role }))
   return Response.json({ organizations })
@@ -20,6 +24,9 @@ export async function GET(req) {
 export async function POST(req) {
   const user = await getUserFromRequest(req)
   if (!user) return Response.json({ error: 'Unauthorized' }, { status: 401 })
+
+  const limited = checkRateLimit(`orgs:${user.id}`, 10, 60000)
+  if (limited) return limited
 
   const { name, slug, description } = await req.json()
 
@@ -37,14 +44,13 @@ export async function POST(req) {
     .select()
     .single()
 
-  if (orgErr) return Response.json({ error: orgErr.message }, { status: 400 })
+  if (orgErr) return dbError(orgErr)
 
-  // Enroll the creator as owner
   const { error: memberErr } = await supabase
     .from('organization_members')
     .insert([{ organization_id: org.id, user_id: user.id, role: 'owner' }])
 
-  if (memberErr) return Response.json({ error: memberErr.message }, { status: 400 })
+  if (memberErr) return dbError(memberErr)
 
   await logAuditAction(org.id, user.id, 'organization_created', { type: 'organization', id: org.id })
   return Response.json(org, { status: 201 })

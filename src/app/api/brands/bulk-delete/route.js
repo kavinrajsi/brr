@@ -1,4 +1,4 @@
-import { getUserFromRequest, getAdminClient } from '@/lib/supabase-server'
+import { getUserFromRequest, getAdminClient, dbError } from '@/lib/supabase-server'
 import { onBrandMutated } from '@/lib/cache-invalidation'
 
 export async function POST(req) {
@@ -26,7 +26,7 @@ export async function POST(req) {
   }
 
   const { error } = await supabase.from('brands').delete().in('id', brandIds)
-  if (error) return Response.json({ error: error.message }, { status: 400 })
+  if (error) return dbError(error)
 
   brandIds.forEach(id => onBrandMutated(id, user.id))
   return Response.json({ message: `Deleted ${brandIds.length} brands`, deleted: brandIds.length })

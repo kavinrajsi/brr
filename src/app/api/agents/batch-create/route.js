@@ -1,4 +1,4 @@
-import { getUserFromRequest, getAdminClient } from '@/lib/supabase-server'
+import { getUserFromRequest, getAdminClient, dbError } from '@/lib/supabase-server'
 
 export async function POST(req) {
   const user = await getUserFromRequest(req)
@@ -32,7 +32,7 @@ export async function POST(req) {
   }))
 
   const { data, error } = await supabase.from('agents').insert(agents).select()
-  if (error) return Response.json({ error: error.message }, { status: 400 })
+  if (error) return dbError(error)
 
   return Response.json({
     message: `Created ${data.length} agents`,

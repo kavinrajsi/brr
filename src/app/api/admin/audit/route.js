@@ -1,4 +1,4 @@
-import { getUserFromRequest, getAdminClient } from '@/lib/supabase-server'
+import { getUserFromRequest, getAdminClient, dbError } from '@/lib/supabase-server'
 
 export async function GET(req) {
   const user = await getUserFromRequest(req)
@@ -36,7 +36,7 @@ export async function GET(req) {
 
   const { data, count, error } = await query
 
-  if (error) return Response.json({ error: error.message }, { status: 400 })
+  if (error) return dbError(error)
 
   return Response.json({
     logs: data ?? [],

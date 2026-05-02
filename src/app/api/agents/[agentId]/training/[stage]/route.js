@@ -1,4 +1,7 @@
-import { getUserFromRequest, getAdminClient } from '@/lib/supabase-server'
+import { getUserFromRequest, getAdminClient, dbError } from '@/lib/supabase-server'
+import { completeStage, failStage } from '@/lib/training-manager'
+
+const ALLOWED_STATUSES = ['In Progress', 'Complete', 'Failed']
 
 async function assertAgentOwner(supabase, agentId, userId) {
   const { data } = await supabase
@@ -24,7 +27,7 @@ export async function GET(req, { params }) {
     .from('training_progress')
     .select('*')
     .eq('agent_id', agentId)
-    .eq('stage', parseInt(stage))
+    .eq('stage', parseInt(stage, 10))
     .single()
 
   if (error) return Response.json({ error: 'Stage not found' }, { status: 404 })
@@ -36,53 +39,79 @@ export async function PUT(req, { params }) {
   if (!user) return Response.json({ error: 'Unauthorized' }, { status: 401 })
 
   const { agentId, stage } = await params
-  const stageNum = parseInt(stage)
-  const supabase = getAdminClient()
+  const stageNum = parseInt(stage, 10)
 
+  if (isNaN(stageNum) || stageNum < 1 || stageNum > 6) {
+    return Response.json({ error: 'stage must be between 1 and 6' }, { status: 400 })
+  }
+
+  const supabase = getAdminClient()
   const agent = await assertAgentOwner(supabase, agentId, user.id)
   if (!agent) return Response.json({ error: 'Agent not found' }, { status: 404 })
 
-  const body = await req.json()
-  const isCompleting = body.status === 'Complete'
+  // Prevent stage skipping — only the current stage may be updated
+  if (stageNum !== agent.current_stage) {
+    return Response.json({ error: 'Can only update the current training stage' }, { status: 403 })
+  }
 
+  const body = await req.json()
+  const { status, validation_results, test_scores, notes } = body
+
+  if (status !== undefined && !ALLOWED_STATUSES.includes(status)) {
+    return Response.json(
+      { error: `status must be one of: ${ALLOWED_STATUSES.join(', ')}` },
+      { status: 400 }
+    )
+  }
+
+  // Route terminal transitions through training-manager to enforce state-machine invariants
+  if (status === 'Complete') {
+    try {
+      const data = await completeStage(agentId, stageNum, validation_results ?? {})
+      if (test_scores !== undefined || notes !== undefined) {
+        await supabase
+          .from('training_progress')
+          .update({ ...(test_scores !== undefined && { test_scores }), ...(notes !== undefined && { notes }) })
+          .eq('agent_id', agentId)
+          .eq('stage', stageNum)
+      }
+      return Response.json(data)
+    } catch (err) {
+      return dbError(err)
+    }
+  }
+
+  if (status === 'Failed') {
+    try {
+      const data = await failStage(agentId, stageNum, validation_results?.failureReason ?? '')
+      if (test_scores !== undefined || notes !== undefined) {
+        await supabase
+          .from('training_progress')
+          .update({ ...(test_scores !== undefined && { test_scores }), ...(notes !== undefined && { notes }) })
+          .eq('agent_id', agentId)
+          .eq('stage', stageNum)
+      }
+      return Response.json(data)
+    } catch (err) {
+      return dbError(err)
+    }
+  }
+
+  // Non-terminal update (notes, scores, validation data on the active stage)
   const { data, error } = await supabase
     .from('training_progress')
     .update({
-      status: body.status,
-      validation_results: body.validation_results,
-      test_scores: body.test_scores,
-      notes: body.notes,
+      ...(status !== undefined && { status }),
+      ...(validation_results !== undefined && { validation_results }),
+      ...(test_scores !== undefined && { test_scores }),
+      ...(notes !== undefined && { notes }),
       updated_at: new Date().toISOString(),
-      ...(isCompleting ? { completed_at: new Date().toISOString() } : {}),
     })
     .eq('agent_id', agentId)
     .eq('stage', stageNum)
     .select()
     .single()
 
-  if (error) return Response.json({ error: error.message }, { status: 400 })
-
-  // Advance the agent and unlock the next stage when a stage completes
-  if (isCompleting && stageNum < 6) {
-    await supabase
-      .from('agents')
-      .update({ current_stage: stageNum + 1 })
-      .eq('id', agentId)
-
-    await supabase
-      .from('training_progress')
-      .update({ status: 'In Progress' })
-      .eq('agent_id', agentId)
-      .eq('stage', stageNum + 1)
-  }
-
-  // Mark agent as certified when stage 6 completes
-  if (isCompleting && stageNum === 6) {
-    await supabase
-      .from('agents')
-      .update({ status: 'Certified', certified_at: new Date().toISOString() })
-      .eq('id', agentId)
-  }
-
+  if (error) return dbError(error)
   return Response.json(data)
 }

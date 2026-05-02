@@ -1,4 +1,4 @@
-import { getUserFromRequest, getAdminClient } from '@/lib/supabase-server'
+import { getUserFromRequest, getAdminClient, dbError } from '@/lib/supabase-server'
 
 async function assertBrandOwner(supabase, brandId, userId) {
   const { data } = await supabase
@@ -28,7 +28,7 @@ export async function GET(req, { params }) {
 
   // PGRST116 = no rows found — that's fine, config hasn't been created yet
   if (error && error.code !== 'PGRST116') {
-    return Response.json({ error: error.message }, { status: 400 })
+    return dbError(error)
   }
 
   return Response.json(data ?? { brand_id: brandId, config: {} })
@@ -65,6 +65,6 @@ export async function PUT(req, { params }) {
         .select()
         .single()
 
-  if (error) return Response.json({ error: error.message }, { status: 400 })
+  if (error) return dbError(error)
   return Response.json(data)
 }

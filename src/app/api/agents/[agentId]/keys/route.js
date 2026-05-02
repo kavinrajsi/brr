@@ -1,5 +1,6 @@
 import { createHash, randomBytes } from 'crypto'
-import { getUserFromRequest, getAdminClient } from '@/lib/supabase-server'
+import { getUserFromRequest, getAdminClient, dbError } from '@/lib/supabase-server'
+import { checkRateLimit } from '@/lib/rate-limiter'
 
 async function assertAgentOwner(supabase, agentId, userId) {
   const { data } = await supabase
@@ -27,13 +28,16 @@ export async function GET(req, { params }) {
     .eq('agent_id', agentId)
     .order('created_at', { ascending: false })
 
-  if (error) return Response.json({ error: error.message }, { status: 400 })
+  if (error) return dbError(error)
   return Response.json({ keys: data ?? [] })
 }
 
 export async function POST(req, { params }) {
   const user = await getUserFromRequest(req)
   if (!user) return Response.json({ error: 'Unauthorized' }, { status: 401 })
+
+  const limited = checkRateLimit(`keys:${user.id}`, 10, 60000)
+  if (limited) return limited
 
   const { agentId } = await params
   const supabase = getAdminClient()
@@ -53,7 +57,7 @@ export async function POST(req, { params }) {
     .select('id, name, key_prefix, created_at')
     .single()
 
-  if (error) return Response.json({ error: error.message }, { status: 400 })
+  if (error) return dbError(error)
 
   // Return the raw key once — it is never stored in plaintext
   return Response.json({ ...data, key: rawKey }, { status: 201 })

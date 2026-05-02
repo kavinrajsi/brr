@@ -1,9 +1,14 @@
-import { getUserFromRequest, getAdminClient } from '@/lib/supabase-server'
+import { getUserFromRequest, getAdminClient, dbError } from '@/lib/supabase-server'
 import { logAuditAction } from '@/lib/permissions'
+import { checkRateLimit } from '@/lib/rate-limiter'
 
 export async function POST(req) {
   const user = await getUserFromRequest(req)
   if (!user) return Response.json({ error: 'Unauthorized' }, { status: 401 })
+
+  // Tight limit: prevents brute-forcing the 64-hex-char invite token
+  const limited = checkRateLimit(`invite-accept:${user.id}`, 10, 60000)
+  if (limited) return limited
 
   const { token } = await req.json()
   if (!token) return Response.json({ error: 'token is required' }, { status: 400 })
@@ -42,14 +47,12 @@ export async function POST(req) {
     return Response.json({ error: 'You are already a member of this organization' }, { status: 400 })
   }
 
-  // Enroll user
   const { error: memberErr } = await supabase
     .from('organization_members')
     .insert([{ organization_id: invite.organization_id, user_id: user.id, role: invite.role }])
 
-  if (memberErr) return Response.json({ error: memberErr.message }, { status: 400 })
+  if (memberErr) return dbError(memberErr)
 
-  // Mark invite accepted
   await supabase
     .from('organization_invites')
     .update({ accepted_at: new Date().toISOString() })

@@ -1,4 +1,4 @@
-import { getUserFromRequest, getAdminClient } from '@/lib/supabase-server'
+import { getUserFromRequest, getAdminClient, dbError } from '@/lib/supabase-server'
 import { completeStage, failStage, advanceAgentStage } from '@/lib/training-manager'
 
 async function assertAgentOwner(supabase, agentId, userId) {
@@ -36,7 +36,7 @@ export async function GET(req, { params }) {
     .eq('agent_id', agentId)
     .order('stage', { ascending: true })
 
-  if (error) return Response.json({ error: error.message }, { status: 400 })
+  if (error) return dbError(error)
   return Response.json({ agentId, progress: data })
 }
 

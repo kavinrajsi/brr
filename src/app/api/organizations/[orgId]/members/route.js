@@ -1,4 +1,4 @@
-import { getUserFromRequest, getAdminClient } from '@/lib/supabase-server'
+import { getUserFromRequest, getAdminClient, dbError } from '@/lib/supabase-server'
 import { hasPermission, logAuditAction } from '@/lib/permissions'
 
 export async function GET(req, { params }) {
@@ -18,7 +18,7 @@ export async function GET(req, { params }) {
     .eq('organization_id', orgId)
     .order('joined_at', { ascending: true })
 
-  if (error) return Response.json({ error: error.message }, { status: 400 })
+  if (error) return dbError(error)
   return Response.json({ members: data })
 }
 
@@ -65,7 +65,7 @@ export async function DELETE(req, { params }) {
     .eq('id', memberId)
     .eq('organization_id', orgId)
 
-  if (error) return Response.json({ error: error.message }, { status: 400 })
+  if (error) return dbError(error)
 
   await logAuditAction(orgId, user.id, 'member_removed', {
     type: 'member', id: member.user_id,
@@ -100,7 +100,7 @@ export async function PATCH(req, { params }) {
     .select()
     .single()
 
-  if (error) return Response.json({ error: error.message }, { status: 400 })
+  if (error) return dbError(error)
 
   await logAuditAction(orgId, user.id, 'member_role_changed', {
     type: 'member', id: memberId, changes: { role },

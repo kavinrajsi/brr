@@ -1,8 +1,13 @@
-import { getUserFromRequest, getAdminClient } from '@/lib/supabase-server'
+import { getUserFromRequest, getAdminClient, dbError } from '@/lib/supabase-server'
+import { checkRateLimit } from '@/lib/rate-limiter'
+import { getUserPlanLimits } from '@/lib/stripe'
 
 export async function GET(req) {
   const user = await getUserFromRequest(req)
   if (!user) return Response.json({ error: 'Unauthorized' }, { status: 401 })
+
+  const limited = checkRateLimit(user.id, 100, 60000)
+  if (limited) return limited
 
   const supabase = getAdminClient()
   const { data, error } = await supabase
@@ -11,13 +16,16 @@ export async function GET(req) {
     .eq('brands.user_id', user.id)
     .order('created_at', { ascending: false })
 
-  if (error) return Response.json({ error: error.message }, { status: 400 })
+  if (error) return dbError(error)
   return Response.json(data)
 }
 
 export async function POST(req) {
   const user = await getUserFromRequest(req)
   if (!user) return Response.json({ error: 'Unauthorized' }, { status: 401 })
+
+  const limited = checkRateLimit(user.id, 20, 60000)
+  if (limited) return limited
 
   const { brand_id, name } = await req.json()
   if (!brand_id || !name?.trim()) {
@@ -26,14 +34,26 @@ export async function POST(req) {
 
   const supabase = getAdminClient()
 
-  // Verify the brand belongs to this user
-  const { data: brand } = await supabase
-    .from('brands')
-    .select('id')
-    .eq('id', brand_id)
-    .eq('user_id', user.id)
-    .single()
+  // Verify the brand belongs to this user and enforce plan agent quota in parallel
+  const [{ data: brand }, { data: brandRows }, limits] = await Promise.all([
+    supabase.from('brands').select('id').eq('id', brand_id).eq('user_id', user.id).single(),
+    supabase.from('brands').select('id').eq('user_id', user.id),
+    getUserPlanLimits(user.id, supabase),
+  ])
+
   if (!brand) return Response.json({ error: 'Brand not found' }, { status: 404 })
+
+  const brandIds = (brandRows ?? []).map(b => b.id)
+  const { count: agentCount } = brandIds.length
+    ? await supabase.from('agents').select('*', { count: 'exact', head: true }).in('brand_id', brandIds)
+    : { count: 0 }
+
+  if (agentCount >= limits.agents) {
+    return Response.json(
+      { error: `Agent limit reached. Upgrade your plan to create more agents.` },
+      { status: 403 }
+    )
+  }
 
   const { data: agent, error } = await supabase
     .from('agents')
@@ -41,7 +61,7 @@ export async function POST(req) {
     .select()
     .single()
 
-  if (error) return Response.json({ error: error.message }, { status: 400 })
+  if (error) return dbError(error)
 
   // Initialise 6 training_progress rows — stage 1 starts In Progress, rest are Pending
   const stages = Array.from({ length: 6 }, (_, i) => ({

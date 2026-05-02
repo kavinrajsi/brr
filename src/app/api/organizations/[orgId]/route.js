@@ -1,4 +1,4 @@
-import { getUserFromRequest, getAdminClient } from '@/lib/supabase-server'
+import { getUserFromRequest, getAdminClient, dbError } from '@/lib/supabase-server'
 import { hasPermission, logAuditAction } from '@/lib/permissions'
 
 export async function GET(req, { params }) {
@@ -43,7 +43,7 @@ export async function PUT(req, { params }) {
     .select()
     .single()
 
-  if (error) return Response.json({ error: error.message }, { status: 400 })
+  if (error) return dbError(error)
 
   await logAuditAction(orgId, user.id, 'organization_updated', {
     type: 'organization', id: orgId, changes: body,
@@ -63,7 +63,7 @@ export async function DELETE(req, { params }) {
 
   const supabase = getAdminClient()
   const { error } = await supabase.from('organizations').delete().eq('id', orgId)
-  if (error) return Response.json({ error: error.message }, { status: 400 })
+  if (error) return dbError(error)
 
   return new Response(null, { status: 204 })
 }

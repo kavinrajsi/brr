@@ -1,6 +1,7 @@
 import { randomBytes } from 'crypto'
-import { getUserFromRequest, getAdminClient } from '@/lib/supabase-server'
+import { getUserFromRequest, getAdminClient, dbError } from '@/lib/supabase-server'
 import { hasPermission, logAuditAction } from '@/lib/permissions'
+import { checkRateLimit } from '@/lib/rate-limiter'
 
 export async function GET(req, { params }) {
   const user = await getUserFromRequest(req)
@@ -19,13 +20,16 @@ export async function GET(req, { params }) {
     .eq('organization_id', orgId)
     .order('created_at', { ascending: false })
 
-  if (error) return Response.json({ error: error.message }, { status: 400 })
+  if (error) return dbError(error)
   return Response.json({ invites: data })
 }
 
 export async function POST(req, { params }) {
   const user = await getUserFromRequest(req)
   if (!user) return Response.json({ error: 'Unauthorized' }, { status: 401 })
+
+  const limited = checkRateLimit(`invites:${user.id}`, 20, 60000)
+  if (limited) return limited
 
   const { orgId } = await params
 
@@ -57,13 +61,13 @@ export async function POST(req, { params }) {
     .select()
     .single()
 
-  if (error) return Response.json({ error: error.message }, { status: 400 })
+  if (error) return dbError(error)
 
   await logAuditAction(orgId, user.id, 'member_invited', {
     type: 'invite', id: data.id, changes: { email, role },
   })
 
-  return Response.json({ invite: data, token }, { status: 201 })
+  return Response.json({ invite: data }, { status: 201 })
 }
 
 export async function DELETE(req, { params }) {
@@ -86,6 +90,6 @@ export async function DELETE(req, { params }) {
     .eq('id', inviteId)
     .eq('organization_id', orgId)
 
-  if (error) return Response.json({ error: error.message }, { status: 400 })
+  if (error) return dbError(error)
   return new Response(null, { status: 204 })
 }

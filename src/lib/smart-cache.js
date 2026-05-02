@@ -1,3 +1,6 @@
+// NOTE: in-memory only — resets on cold starts in serverless environments.
+// For production at scale, replace with Redis or Upstash.
+
 // TTL strategies keyed by data freshness requirements
 const STRATEGIES = {
   static: 3600000,  // 1 hour — config/metadata that rarely changes

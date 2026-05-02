@@ -1,4 +1,4 @@
-import { getUserFromRequest, getAdminClient } from '@/lib/supabase-server'
+import { getUserFromRequest, getAdminClient, dbError } from '@/lib/supabase-server'
 
 async function assertBrandOwner(supabase, brandId, userId) {
   const { data } = await supabase
@@ -22,7 +22,7 @@ export async function GET(req, { params }) {
     .eq('brand_id', brandId)
     .order('test_set').order('scenario_number')
 
-  if (error) return Response.json({ error: error.message }, { status: 400 })
+  if (error) return dbError(error)
   return Response.json(data ?? [])
 }
 
@@ -55,6 +55,6 @@ export async function POST(req, { params }) {
     .select()
     .single()
 
-  if (error) return Response.json({ error: error.message }, { status: 400 })
+  if (error) return dbError(error)
   return Response.json(data, { status: 201 })
 }

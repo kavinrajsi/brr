@@ -1,4 +1,4 @@
-import { getUserFromRequest, getAdminClient } from '@/lib/supabase-server'
+import { getUserFromRequest, getAdminClient, dbError } from '@/lib/supabase-server'
 
 export async function DELETE(req, { params }) {
   const user = await getUserFromRequest(req)
@@ -19,6 +19,6 @@ export async function DELETE(req, { params }) {
   if (!key) return Response.json({ error: 'Key not found' }, { status: 404 })
 
   const { error } = await supabase.from('agent_api_keys').delete().eq('id', keyId)
-  if (error) return Response.json({ error: error.message }, { status: 400 })
+  if (error) return dbError(error)
   return new Response(null, { status: 204 })
 }

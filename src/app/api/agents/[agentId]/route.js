@@ -1,4 +1,4 @@
-import { getUserFromRequest, getAdminClient } from '@/lib/supabase-server'
+import { getUserFromRequest, getAdminClient, dbError } from '@/lib/supabase-server'
 
 async function assertAgentOwner(supabase, agentId, userId) {
   const { data } = await supabase
@@ -52,7 +52,7 @@ export async function PUT(req, { params }) {
     .select()
     .single()
 
-  if (error) return Response.json({ error: error.message }, { status: 400 })
+  if (error) return dbError(error)
   return Response.json(data)
 }
 
@@ -67,6 +67,6 @@ export async function DELETE(req, { params }) {
   if (!owned) return Response.json({ error: 'Agent not found' }, { status: 404 })
 
   const { error } = await supabase.from('agents').delete().eq('id', agentId)
-  if (error) return Response.json({ error: error.message }, { status: 400 })
+  if (error) return dbError(error)
   return new Response(null, { status: 204 })
 }

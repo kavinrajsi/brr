@@ -38,3 +38,16 @@ export const PLANS = {
 export function isStripeConfigured() {
   return Boolean(process.env.STRIPE_SECRET_KEY)
 }
+
+// Returns the plan limits for a user based on their active subscription.
+// Falls back to the Free plan if no subscription row exists.
+export async function getUserPlanLimits(userId, supabase) {
+  const { data } = await supabase
+    .from('subscriptions')
+    .select('plan, status')
+    .eq('user_id', userId)
+    .single()
+
+  const activePlan = data?.status === 'active' ? (data.plan ?? 'free') : 'free'
+  return PLANS[activePlan]?.limits ?? PLANS.free.limits
+}

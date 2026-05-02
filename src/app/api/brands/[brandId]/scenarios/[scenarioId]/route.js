@@ -1,4 +1,4 @@
-import { getUserFromRequest, getAdminClient } from '@/lib/supabase-server'
+import { getUserFromRequest, getAdminClient, dbError } from '@/lib/supabase-server'
 
 async function assertScenarioOwner(supabase, scenarioId, userId) {
   const { data } = await supabase
@@ -33,7 +33,7 @@ export async function PUT(req, { params }) {
     .select()
     .single()
 
-  if (error) return Response.json({ error: error.message }, { status: 400 })
+  if (error) return dbError(error)
   return Response.json(data)
 }
 
@@ -48,6 +48,6 @@ export async function DELETE(req, { params }) {
   if (!owned) return Response.json({ error: 'Scenario not found' }, { status: 404 })
 
   const { error } = await supabase.from('test_scenarios').delete().eq('id', scenarioId)
-  if (error) return Response.json({ error: error.message }, { status: 400 })
+  if (error) return dbError(error)
   return new Response(null, { status: 204 })
 }

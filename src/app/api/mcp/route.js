@@ -112,14 +112,15 @@ function buildMcpServer(supabase, authedAgentId) {
 async function handleMcp(req) {
   const supabase = getAdminClient()
 
-  // Auth: accept a BRR API key in Authorization header
-  let authedAgentId = null
+  // Auth: a BRR API key is required for all MCP requests
   const authHeader = req.headers.get('authorization') ?? ''
-  if (authHeader.startsWith('Bearer brr_live_')) {
-    authedAgentId = await resolveUserFromApiKey(supabase, authHeader.slice(7))
-    if (!authedAgentId) {
-      return Response.json({ error: 'Invalid API key' }, { status: 401 })
-    }
+  if (!authHeader.startsWith('Bearer brr_live_')) {
+    return Response.json({ error: 'Authorization required' }, { status: 401 })
+  }
+
+  const authedAgentId = await resolveUserFromApiKey(supabase, authHeader.slice(7))
+  if (!authedAgentId) {
+    return Response.json({ error: 'Invalid API key' }, { status: 401 })
   }
 
   const server = buildMcpServer(supabase, authedAgentId)
