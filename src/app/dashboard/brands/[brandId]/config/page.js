@@ -353,12 +353,12 @@ export default function BrandConfigPage() {
               label="Webhook Secret"
               hint="Used to sign the payload — verify with X-BRR-Signature header."
             >
-              <Input
+              <input
                 type="password"
                 placeholder="e.g. whsec_..."
                 value={formData.webhook_secret ?? ''}
                 onChange={e => set('webhook_secret', e.target.value)}
-                className="mt-1"
+                className="mt-1 w-full rounded-md border border-input bg-background px-3 py-2 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
               />
             </Field>
           </div>
