@@ -68,6 +68,18 @@ const SECTIONS = [
         title: 'Start Training',
         body: 'Open the agent and click "Start Training" on Stage 1. Work through each stage sequentially — each must be completed before the next unlocks.',
       },
+      {
+        step: '5',
+        title: 'Deploy the Agent',
+        body: 'Once all 6 stages are complete the agent is Certified. Click "Deploy Agent" to make it live. Only Deployed or Certified agents can receive chat traffic.',
+      },
+      {
+        step: '6',
+        title: 'Connect via API or MCP',
+        body: 'Generate an API key from the agent page, then call your agent via the REST API or add the MCP server to Claude.ai. See the Integration section below.',
+        link: '#integration',
+        linkLabel: 'Jump to Integration',
+      },
     ],
   },
   {
@@ -97,6 +109,36 @@ const SECTIONS = [
         step: '3',
         title: 'Audit Logs',
         body: 'Every org action (invites, role changes, updates) is logged. Admins can view the full audit trail under Admin → Audit Logs.',
+      },
+    ],
+  },
+  {
+    id: 'integration',
+    title: 'Integration & API',
+    icon: '🔌',
+    steps: [
+      {
+        step: '1',
+        title: 'Generate an API Key',
+        body: 'Open a deployed agent and scroll to API Keys. Enter a key name (e.g. "Production") and click Generate Key. Copy the key immediately — it is shown only once. You can reveal it again within the same browser session using the Show button.',
+        link: '/dashboard/agents',
+        linkLabel: 'Go to Agents',
+      },
+      {
+        step: '2',
+        title: 'Call via REST API',
+        body: 'Send a POST request to /api/agents/<agentId>/chat with your message. Include the API key as a Bearer token in the Authorization header. Only Deployed or Certified agents respond.',
+        code: `curl -X POST https://your-domain.com/api/agents/<agentId>/chat \\\n  -H "Authorization: Bearer brr_live_<your-key>" \\\n  -H "Content-Type: application/json" \\\n  -d '{"message": "How do I return an item?"}'`,
+      },
+      {
+        step: '3',
+        title: 'Connect Claude.ai via MCP',
+        body: 'In Claude.ai → Settings → Integrations, add an MCP server. Use your app URL + /api/mcp as the server URL and your API key as the Bearer token when prompted. Claude gains two tools: list_agents and chat_with_agent.',
+      },
+      {
+        step: '4',
+        title: 'Revoke Keys',
+        body: 'If a key is compromised, click Revoke next to it on the agent page. The key stops working immediately. Generate a new key and update your integrations.',
       },
     ],
   },
@@ -143,15 +185,18 @@ function StageCard({ stage }) {
   )
 }
 
-function StepCard({ step, title, body, link, linkLabel }) {
+function StepCard({ step, title, body, code, link, linkLabel }) {
   return (
     <div className="flex gap-4 pb-6 last:pb-0">
       <div className="flex-shrink-0 w-7 h-7 rounded-full bg-slate-100 text-slate-700 flex items-center justify-center text-xs font-bold">
         {step}
       </div>
-      <div>
+      <div className="flex-1 min-w-0">
         <h4 className="font-semibold text-slate-900 mb-1">{title}</h4>
         <p className="text-sm text-slate-600 mb-2">{body}</p>
+        {code && (
+          <pre className="text-xs bg-slate-900 text-green-400 rounded-lg p-3 overflow-x-auto mb-2">{code}</pre>
+        )}
         {link && (
           <Link href={link} className="text-xs font-medium text-slate-900 underline underline-offset-2 hover:text-slate-600">
             {linkLabel} →
