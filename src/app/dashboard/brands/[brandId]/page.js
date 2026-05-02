@@ -84,23 +84,30 @@ export default function BrandDetailPage() {
         </Card>
       </div>
 
-      <Card className="p-6 bg-slate-50 mb-8">
+      <div className="mb-8">
         <h2 className="text-lg font-bold text-slate-900 mb-4">Actions</h2>
-        <div className="space-y-2">
-          <Link href={`/dashboard/brands/${brand.id}/config`}>
-            <Button className="w-full justify-start">⚙️ Configure Brand</Button>
-          </Link>
-          <Link href={`/dashboard/brands/${brand.id}/training`}>
-            <Button variant="outline" className="w-full justify-start">📚 Training</Button>
-          </Link>
-          <Link href={`/dashboard/brands/${brand.id}/scenarios`}>
-            <Button variant="outline" className="w-full justify-start">📝 Test Scenarios</Button>
-          </Link>
-          <Link href={`/dashboard/brands/${brand.id}/knowledge`}>
-            <Button variant="outline" className="w-full justify-start">📖 Knowledge Base</Button>
-          </Link>
+        <div className="grid grid-cols-2 gap-4">
+          {[
+            { href: `/dashboard/brands/${brand.id}/config`, icon: '⚙️', label: 'Configure Brand', desc: 'Set tone, values, and brand identity' },
+            { href: `/dashboard/brands/${brand.id}/training`, icon: '📚', label: 'Training', desc: 'Run training stages for your agent' },
+            { href: `/dashboard/brands/${brand.id}/scenarios`, icon: '📝', label: 'Test Scenarios', desc: 'Simulate customer conversations' },
+            { href: `/dashboard/brands/${brand.id}/knowledge`, icon: '📖', label: 'Knowledge Base', desc: 'Upload docs, FAQs, and product info' },
+            { href: `/dashboard/brands/${brand.id}/prism`, icon: '◈', label: 'Brand Prism', desc: 'View full identity prism and export as Markdown' },
+          ].map(({ href, icon, label, desc }) => (
+            <Link key={label} href={href}>
+              <Card className="p-5 hover:shadow-md hover:border-slate-300 transition-all cursor-pointer h-full">
+                <div className="flex items-start gap-3">
+                  <span className="text-2xl leading-none mt-0.5">{icon}</span>
+                  <div>
+                    <p className="font-semibold text-slate-900 text-sm">{label}</p>
+                    <p className="text-xs text-slate-500 mt-0.5">{desc}</p>
+                  </div>
+                </div>
+              </Card>
+            </Link>
+          ))}
         </div>
-      </Card>
+      </div>
 
       {brand.notes && (
         <Card className="p-6 bg-blue-50 border-blue-200">

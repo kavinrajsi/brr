@@ -5,7 +5,6 @@ import { useParams } from 'next/navigation'
 import { useBrandConfig } from '@/hooks/useBrandConfig'
 import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { Label } from '@/components/ui/label'
 import { Alert, AlertDescription } from '@/components/ui/alert'
@@ -66,12 +65,18 @@ export default function BrandConfigPage() {
   const { config, isLoading, error, isSaving, saveConfig } = useBrandConfig(brandId)
   const [currentStep, setCurrentStep] = useState(1)
   const [formData, setFormData] = useState({})
+  const [savedData, setSavedData] = useState({})
   const [saveError, setSaveError] = useState('')
   const [saveSuccess, setSaveSuccess] = useState(false)
 
   useEffect(() => {
-    if (config) setFormData(config)
+    if (config) {
+      setFormData(config)
+      setSavedData(config)
+    }
   }, [config])
+
+  const isDirty = JSON.stringify(formData) !== JSON.stringify(savedData)
 
   const set = (key, value) => setFormData(prev => ({ ...prev, [key]: value }))
 
@@ -80,6 +85,7 @@ export default function BrandConfigPage() {
     setSaveSuccess(false)
     try {
       await saveConfig(formData)
+      setSavedData(formData)
       setSaveSuccess(true)
       setTimeout(() => setSaveSuccess(false), 3000)
     } catch (err) {
@@ -173,7 +179,8 @@ export default function BrandConfigPage() {
               label="Tagline / Slogan"
               hint="The line that best captures the brand in a single phrase."
             >
-              <Input
+              <Textarea
+                rows={2}
                 placeholder="e.g. Just Do It"
                 value={formData.tagline ?? ''}
                 onChange={e => set('tagline', e.target.value)}
@@ -184,7 +191,8 @@ export default function BrandConfigPage() {
               label="Signature Products or Services"
               hint="The offerings most associated with the brand."
             >
-              <Input
+              <Textarea
+                rows={2}
                 placeholder="e.g. Running shoes, athletic apparel, sports accessories"
                 value={formData.signature_products ?? ''}
                 onChange={e => set('signature_products', e.target.value)}
@@ -201,7 +209,8 @@ export default function BrandConfigPage() {
               label="Character Traits"
               hint="Comma-separated traits — as if the brand were a person."
             >
-              <Input
+              <Textarea
+                rows={2}
                 placeholder="e.g. bold, inspiring, competitive, authentic"
                 value={formData.personality_traits ?? ''}
                 onChange={e => set('personality_traits', e.target.value)}
@@ -212,7 +221,8 @@ export default function BrandConfigPage() {
               label="Tone of Voice"
               hint="How the brand speaks — choose a few adjectives."
             >
-              <Input
+              <Textarea
+                rows={2}
                 placeholder="e.g. energetic, direct, motivational"
                 value={formData.tone ?? ''}
                 onChange={e => set('tone', e.target.value)}
@@ -223,7 +233,8 @@ export default function BrandConfigPage() {
               label="Response Style"
               hint="How the AI should structure its replies."
             >
-              <Input
+              <Textarea
+                rows={2}
                 placeholder="e.g. short and punchy, never verbose, use action verbs"
                 value={formData.response_style ?? ''}
                 onChange={e => set('response_style', e.target.value)}
@@ -234,7 +245,8 @@ export default function BrandConfigPage() {
               label="Brand Promise / Soul"
               hint="One sentence capturing the brand's core commitment."
             >
-              <Input
+              <Textarea
+                rows={2}
                 placeholder="e.g. To bring inspiration and innovation to every athlete in the world."
                 value={formData.promise ?? ''}
                 onChange={e => set('promise', e.target.value)}
@@ -251,7 +263,8 @@ export default function BrandConfigPage() {
               label="Core Values"
               hint="Comma-separated values that the brand will never compromise."
             >
-              <Input
+              <Textarea
+                rows={2}
                 placeholder="e.g. excellence, innovation, sustainability, community"
                 value={formData.key_values ?? ''}
                 onChange={e => set('key_values', e.target.value)}
@@ -292,7 +305,8 @@ export default function BrandConfigPage() {
               label="Relationship Type"
               hint="How would you describe the bond between brand and customer?"
             >
-              <Input
+              <Textarea
+                rows={2}
                 placeholder="e.g. coach, mentor, training partner, challenger"
                 value={formData.relationship_type ?? ''}
                 onChange={e => set('relationship_type', e.target.value)}
@@ -303,7 +317,8 @@ export default function BrandConfigPage() {
               label="Escalation Triggers"
               hint="Topics where the AI should hand off to a human specialist. Comma-separated."
             >
-              <Input
+              <Textarea
+                rows={2}
                 placeholder="e.g. refund disputes, injury complaints, legal questions"
                 value={formData.escalation_triggers ?? ''}
                 onChange={e => set('escalation_triggers', e.target.value)}
@@ -314,7 +329,8 @@ export default function BrandConfigPage() {
               label="Prohibited Topics"
               hint="Topics the AI must never engage with. Comma-separated."
             >
-              <Input
+              <Textarea
+                rows={2}
                 placeholder="e.g. competitor comparisons, political opinions, pricing negotiation"
                 value={formData.prohibited_topics ?? ''}
                 onChange={e => set('prohibited_topics', e.target.value)}
@@ -325,7 +341,8 @@ export default function BrandConfigPage() {
               label="Webhook URL"
               hint="HTTPS endpoint to call when escalation is triggered."
             >
-              <Input
+              <Textarea
+                rows={1}
                 placeholder="e.g. https://your-system.example.com/handoff"
                 value={formData.webhook_url ?? ''}
                 onChange={e => set('webhook_url', e.target.value)}
@@ -354,7 +371,8 @@ export default function BrandConfigPage() {
               label="Target Audience"
               hint="Who the brand is primarily speaking to."
             >
-              <Input
+              <Textarea
+                rows={2}
                 placeholder="e.g. athletes of all levels aged 16–40, performance-driven individuals"
                 value={formData.target_audience ?? ''}
                 onChange={e => set('target_audience', e.target.value)}
@@ -365,7 +383,8 @@ export default function BrandConfigPage() {
               label="Customer Archetype"
               hint="The idealised image of the person who uses this brand."
             >
-              <Input
+              <Textarea
+                rows={2}
                 placeholder="e.g. the relentless competitor who refuses to settle"
                 value={formData.reflection_archetype ?? ''}
                 onChange={e => set('reflection_archetype', e.target.value)}
@@ -406,7 +425,8 @@ export default function BrandConfigPage() {
               label="Aspiration Fulfilled"
               hint="What version of themselves does the brand help customers become?"
             >
-              <Input
+              <Textarea
+                rows={2}
                 placeholder="e.g. the best version of an athlete"
                 value={formData.selfimage_aspiration ?? ''}
                 onChange={e => set('selfimage_aspiration', e.target.value)}
@@ -436,7 +456,7 @@ export default function BrandConfigPage() {
           >
             ← Previous
           </Button>
-          <Button onClick={handleSave} disabled={isSaving} className="flex-1">
+          <Button onClick={handleSave} disabled={isSaving || !isDirty} className="flex-1">
             {isSaving ? 'Saving…' : 'Save'}
           </Button>
           <Button
