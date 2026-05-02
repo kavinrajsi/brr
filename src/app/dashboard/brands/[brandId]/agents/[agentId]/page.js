@@ -18,12 +18,37 @@ const STATUS_STYLES = {
 
 // ─── API Key Manager ──────────────────────────────────────────────────────────
 
+const SESSION_KEY = 'brr_api_keys'
+
+function saveKeyToSession(id, rawKey) {
+  try {
+    const stored = JSON.parse(sessionStorage.getItem(SESSION_KEY) ?? '{}')
+    stored[id] = rawKey
+    sessionStorage.setItem(SESSION_KEY, JSON.stringify(stored))
+  } catch {}
+}
+
+function getKeyFromSession(id) {
+  try {
+    const stored = JSON.parse(sessionStorage.getItem(SESSION_KEY) ?? '{}')
+    return stored[id] ?? null
+  } catch { return null }
+}
+
+function removeKeyFromSession(id) {
+  try {
+    const stored = JSON.parse(sessionStorage.getItem(SESSION_KEY) ?? '{}')
+    delete stored[id]
+    sessionStorage.setItem(SESSION_KEY, JSON.stringify(stored))
+  } catch {}
+}
+
 function ApiKeyManager({ agentId }) {
-  const [keys, setKeys]           = useState([])
+  const [keys, setKeys]             = useState([])
   const [newKeyName, setNewKeyName] = useState('')
-  const [creating, setCreating]   = useState(false)
-  const [revealed, setRevealed]   = useState(null) // { id, key }
-  const [loading, setLoading]     = useState(true)
+  const [creating, setCreating]     = useState(false)
+  const [revealed, setRevealed]     = useState(null) // { id, key }
+  const [loading, setLoading]       = useState(true)
 
   useEffect(() => {
     apiCall(`/api/agents/${agentId}/keys`)
@@ -40,6 +65,7 @@ function ApiKeyManager({ agentId }) {
         body: JSON.stringify({ name: newKeyName || 'Default' }),
       })
       setKeys(prev => [created, ...prev])
+      saveKeyToSession(created.id, created.key)
       setRevealed({ id: created.id, key: created.key })
       setNewKeyName('')
     } catch (err) {
@@ -53,7 +79,14 @@ function ApiKeyManager({ agentId }) {
     if (!confirm('Revoke this key? Any integration using it will stop working.')) return
     await apiCall(`/api/agents/${agentId}/keys/${keyId}`, { method: 'DELETE' })
     setKeys(prev => prev.filter(k => k.id !== keyId))
+    removeKeyFromSession(keyId)
     if (revealed?.id === keyId) setRevealed(null)
+  }
+
+  const handleShow = (keyId) => {
+    if (revealed?.id === keyId) { setRevealed(null); return }
+    const raw = getKeyFromSession(keyId)
+    if (raw) setRevealed({ id: keyId, key: raw })
   }
 
   return (
@@ -74,10 +107,20 @@ function ApiKeyManager({ agentId }) {
         </Button>
       </div>
 
-      {/* Revealed once */}
+      {/* Revealed key banner */}
       {revealed && (
         <div className="mb-5 p-4 bg-amber-50 border border-amber-200 rounded-lg">
-          <p className="text-xs font-semibold text-amber-800 mb-2">Copy this key now — it will not be shown again</p>
+          <div className="flex items-center justify-between mb-2">
+            <p className="text-xs font-semibold text-amber-800">
+              {keys.find(k => k.id === revealed.id)?.name ?? 'API Key'}
+            </p>
+            <button
+              onClick={() => setRevealed(null)}
+              className="text-amber-500 hover:text-amber-800 text-xs"
+            >
+              Hide
+            </button>
+          </div>
           <code className="block text-xs bg-white border border-amber-200 rounded px-3 py-2 font-mono break-all select-all">
             {revealed.key}
           </code>
@@ -85,7 +128,7 @@ function ApiKeyManager({ agentId }) {
             size="sm"
             variant="outline"
             className="mt-2 text-xs"
-            onClick={() => { navigator.clipboard.writeText(revealed.key); }}
+            onClick={() => navigator.clipboard.writeText(revealed.key)}
           >
             Copy
           </Button>
@@ -99,29 +142,50 @@ function ApiKeyManager({ agentId }) {
         <p className="text-sm text-slate-400">No keys yet.</p>
       ) : (
         <div className="divide-y divide-slate-100">
-          {keys.map(k => (
-            <div key={k.id} className="py-3 flex items-center justify-between gap-4">
-              <div>
-                <p className="text-sm font-medium text-slate-900">{k.name}</p>
-                <p className="text-xs text-slate-400 font-mono">{k.key_prefix}</p>
+          {keys.map(k => {
+            const available = Boolean(getKeyFromSession(k.id))
+            const isShowing = revealed?.id === k.id
+            return (
+              <div key={k.id} className="py-3 flex items-center justify-between gap-4">
+                <div>
+                  <p className="text-sm font-medium text-slate-900">{k.name}</p>
+                  <p className="text-xs text-slate-400 font-mono">{k.key_prefix}</p>
+                </div>
+                <div className="flex items-center gap-2 text-right">
+                  {k.last_used_at && (
+                    <p className="text-xs text-slate-400 hidden sm:block">
+                      Last used {new Date(k.last_used_at).toLocaleDateString()}
+                    </p>
+                  )}
+                  {available ? (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="text-xs"
+                      onClick={() => handleShow(k.id)}
+                    >
+                      {isShowing ? 'Hide' : 'Show'}
+                    </Button>
+                  ) : (
+                    <span
+                      className="text-xs text-slate-300 cursor-default select-none"
+                      title="Key unavailable — revoke and generate a new one to view it"
+                    >
+                      Show
+                    </span>
+                  )}
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="text-red-600 border-red-200 hover:bg-red-50"
+                    onClick={() => handleRevoke(k.id)}
+                  >
+                    Revoke
+                  </Button>
+                </div>
               </div>
-              <div className="flex items-center gap-4 text-right">
-                {k.last_used_at && (
-                  <p className="text-xs text-slate-400 hidden sm:block">
-                    Last used {new Date(k.last_used_at).toLocaleDateString()}
-                  </p>
-                )}
-                <Button
-                  size="sm"
-                  variant="outline"
-                  className="text-red-600 border-red-200 hover:bg-red-50"
-                  onClick={() => handleRevoke(k.id)}
-                >
-                  Revoke
-                </Button>
-              </div>
-            </div>
-          ))}
+            )
+          })}
         </div>
       )}
     </Card>
