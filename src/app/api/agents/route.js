@@ -71,7 +71,11 @@ export async function POST(req) {
     validation_results: {},
     test_scores: {},
   }))
-  await supabase.from('training_progress').insert(stages)
+  const { error: progressError } = await supabase.from('training_progress').insert(stages)
+  if (progressError) {
+    await supabase.from('agents').delete().eq('id', agent.id)
+    return dbError(progressError)
+  }
 
   return Response.json(agent, { status: 201 })
 }

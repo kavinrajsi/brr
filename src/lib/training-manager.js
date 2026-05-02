@@ -44,12 +44,19 @@ export async function completeStage(agentId, stage, results = {}) {
   if (error) throw error
   if (stage < 6) {
     await advanceAgentStage(agentId, stage + 1)
-    await supabase
+    const { error: unlockErr } = await supabase
       .from('training_progress')
       .update({ status: 'In Progress' })
       .eq('agent_id', agentId)
       .eq('stage', stage + 1)
       .eq('status', 'Pending')
+    if (unlockErr) throw unlockErr
+  } else {
+    const { error: certErr } = await supabase
+      .from('agents')
+      .update({ status: 'Certified', certified_at: new Date().toISOString() })
+      .eq('id', agentId)
+    if (certErr) throw certErr
   }
   return data
 }

@@ -39,15 +39,23 @@ export async function PUT(req, { params }) {
   if (!owned) return Response.json({ error: 'Agent not found' }, { status: 404 })
 
   const body = await req.json()
+
+  // current_stage and certified_at are owned by training-manager.js — never write them here.
+  // The only allowed status transition through this route is Certified → Deployed.
+  const update = {}
+  if (body.name !== undefined) update.name = body.name
+  if (body.status === 'Deployed') {
+    const { data: current } = await supabase.from('agents').select('status').eq('id', agentId).single()
+    if (current?.status !== 'Certified') {
+      return Response.json({ error: 'Agent must be Certified before it can be Deployed' }, { status: 422 })
+    }
+    update.status = 'Deployed'
+    update.deployed_at = body.deployed_at ?? new Date().toISOString()
+  }
+
   const { data, error } = await supabase
     .from('agents')
-    .update({
-      name: body.name,
-      status: body.status,
-      current_stage: body.current_stage,
-      certified_at: body.certified_at,
-      deployed_at: body.deployed_at,
-    })
+    .update(update)
     .eq('id', agentId)
     .select()
     .single()
