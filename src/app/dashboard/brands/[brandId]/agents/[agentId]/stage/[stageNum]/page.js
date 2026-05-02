@@ -59,7 +59,7 @@ const TEST_SETS = [
   { set: 'E', title: 'Real Client Scenarios',   count: 5 },
 ]
 
-function Stage2({ scores, onChange, scenarios }) {
+function Stage2({ scores, onChange, scenarios, brandId, agentId }) {
   const passed = TEST_SETS.reduce((acc, ts) => {
     for (let i = 1; i <= ts.count; i++) {
       if (scores[`${ts.set}${i}`] === 'pass') acc++
@@ -67,19 +67,53 @@ function Stage2({ scores, onChange, scenarios }) {
     return acc
   }, 0)
   const pct = Math.round((passed / 25) * 100)
+  const hasScenarios = scenarios.length > 0
 
   const scenarioMap = {}
   scenarios.forEach(s => { scenarioMap[`${s.test_set}${s.scenario_number}`] = s })
 
   return (
     <div className="space-y-6">
+      {/* Workflow guide */}
+      <div className="bg-blue-50 border border-blue-200 rounded-xl p-4 space-y-2">
+        <p className="text-sm font-semibold text-blue-900">How to complete this stage</p>
+        <ol className="text-xs text-blue-800 space-y-1 list-decimal list-inside">
+          <li>
+            Add test prompts for each scenario in{' '}
+            <Link href={`/dashboard/brands/${brandId}/scenarios`} className="underline font-medium">
+              Brand → Test Scenarios
+            </Link>
+            .
+          </li>
+          <li>
+            Send each prompt to your agent in the{' '}
+            <Link href={`/dashboard/brands/${brandId}/agents/${agentId}`} className="underline font-medium">
+              Test Console
+            </Link>
+            .
+          </li>
+          <li>Return here and mark each scenario Pass or Fail based on the response.</li>
+          <li>Score 20/25 (80%) to advance to Stage 3.</li>
+        </ol>
+      </div>
+
+      {/* Score bar */}
       <div className="flex items-center justify-between p-4 bg-slate-50 rounded-lg">
         <p className="text-sm font-semibold text-slate-700">Score</p>
         <p className={`text-lg font-bold ${pct >= 80 ? 'text-green-600' : 'text-slate-900'}`}>
           {passed}/25 ({pct}%) {pct >= 80 ? '✓ Pass' : ''}
         </p>
       </div>
-      <p className="text-xs text-slate-500">Need 80% (20/25) to pass this stage.</p>
+
+      {!hasScenarios && (
+        <div className="text-center py-8 border border-dashed border-slate-200 rounded-xl">
+          <p className="text-sm font-semibold text-slate-700 mb-1">No scenario prompts yet</p>
+          <p className="text-xs text-slate-500 mb-4">Add prompts so each scenario shows what to test the agent with.</p>
+          <Link href={`/dashboard/brands/${brandId}/scenarios`}>
+            <Button size="sm">Go to Test Scenarios →</Button>
+          </Link>
+        </div>
+      )}
 
       {TEST_SETS.map(ts => (
         <div key={ts.set}>
@@ -95,12 +129,11 @@ function Stage2({ scores, onChange, scenarios }) {
                 <div key={key} className="border border-slate-200 rounded-lg overflow-hidden">
                   <div className="flex items-center justify-between px-4 py-3 bg-white">
                     <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium text-slate-700">
-                        Scenario {key}
-                      </p>
-                      {scenario?.input_prompt && (
-                        <p className="text-xs text-slate-500 mt-0.5 truncate">{scenario.input_prompt}</p>
-                      )}
+                      <p className="text-sm font-medium text-slate-700">Scenario {key}</p>
+                      {scenario?.input_prompt
+                        ? <p className="text-xs text-slate-500 mt-0.5">{scenario.input_prompt}</p>
+                        : <p className="text-xs text-slate-300 mt-0.5 italic">No prompt added yet</p>
+                      }
                     </div>
                     <div className="flex gap-2 ml-4 shrink-0">
                       {['pass', 'fail'].map(v => (
@@ -578,7 +611,7 @@ export default function StagePage() {
 
       <Card className="p-8 mb-6">
         {num === 1 && <Stage1 results={results} onChange={setResults} />}
-        {num === 2 && <Stage2 scores={scores} onChange={setScores} scenarios={scenarios} />}
+        {num === 2 && <Stage2 scores={scores} onChange={setScores} scenarios={scenarios} brandId={brandId} agentId={agentId} />}
         {num === 3 && <Stage3 results={results} onChange={setResults} />}
         {num === 4 && <Stage4 results={results} onChange={setResults} />}
         {num === 5 && <Stage5 results={results} onChange={setResults} />}
