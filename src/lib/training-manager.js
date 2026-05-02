@@ -42,7 +42,15 @@ export async function completeStage(agentId, stage, results = {}) {
     .single()
 
   if (error) throw error
-  if (stage < 6) await advanceAgentStage(agentId, stage + 1)
+  if (stage < 6) {
+    await advanceAgentStage(agentId, stage + 1)
+    await supabase
+      .from('training_progress')
+      .update({ status: 'In Progress' })
+      .eq('agent_id', agentId)
+      .eq('stage', stage + 1)
+      .eq('status', 'Pending')
+  }
   return data
 }
 
