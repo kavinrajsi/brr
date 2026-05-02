@@ -321,6 +321,29 @@ export default function BrandConfigPage() {
                 className="mt-1"
               />
             </Field>
+            <Field
+              label="Webhook URL"
+              hint="HTTPS endpoint to call when escalation is triggered."
+            >
+              <Input
+                placeholder="e.g. https://your-system.example.com/handoff"
+                value={formData.webhook_url ?? ''}
+                onChange={e => set('webhook_url', e.target.value)}
+                className="mt-1"
+              />
+            </Field>
+            <Field
+              label="Webhook Secret"
+              hint="Used to sign the payload — verify with X-BRR-Signature header."
+            >
+              <Input
+                type="password"
+                placeholder="e.g. whsec_..."
+                value={formData.webhook_secret ?? ''}
+                onChange={e => set('webhook_secret', e.target.value)}
+                className="mt-1"
+              />
+            </Field>
           </div>
         )}
 

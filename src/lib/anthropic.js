@@ -86,3 +86,7 @@ export function buildBrandSystemPrompt(brandName, config = {}) {
 
   return lines.join('\n')
 }
+
+export function buildCachedSystemBlock(text) {
+  return { type: 'text', text, cache_control: { type: 'ephemeral' } }
+}

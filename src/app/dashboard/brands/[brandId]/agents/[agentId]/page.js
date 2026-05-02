@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { useParams } from 'next/navigation'
 import { useTraining } from '@/hooks/useTraining'
-import { apiCall } from '@/lib/api-client'
+import { apiCall, streamChat } from '@/lib/api-client'
 import { StageCard } from '@/components/training/StageCard'
 import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -195,10 +195,11 @@ function ApiKeyManager({ agentId }) {
 // ─── Test Console ─────────────────────────────────────────────────────────────
 
 function ChatConsole({ agentId }) {
-  const [messages, setMessages] = useState([])
-  const [input, setInput]       = useState('')
-  const [sending, setSending]   = useState(false)
-  const bottomRef               = useRef(null)
+  const [messages, setMessages]             = useState([])
+  const [input, setInput]                   = useState('')
+  const [sending, setSending]               = useState(false)
+  const [conversationId, setConversationId] = useState(null)
+  const bottomRef                           = useRef(null)
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
@@ -210,17 +211,38 @@ function ChatConsole({ agentId }) {
     setInput('')
     setMessages(prev => [...prev, { role: 'user', text }])
     setSending(true)
-    try {
-      const { reply } = await apiCall(`/api/agents/${agentId}/chat`, {
-        method: 'POST',
-        body: JSON.stringify({ message: text }),
-      })
-      setMessages(prev => [...prev, { role: 'agent', text: reply }])
-    } catch (err) {
-      setMessages(prev => [...prev, { role: 'error', text: err.message }])
-    } finally {
-      setSending(false)
-    }
+    setMessages(prev => [...prev, { role: 'agent', text: '', streaming: true }])
+
+    await streamChat(
+      agentId,
+      text,
+      (token) => {
+        setMessages(prev => {
+          const updated = [...prev]
+          const last = updated[updated.length - 1]
+          if (last?.role === 'agent') updated[updated.length - 1] = { ...last, text: last.text + token }
+          return updated
+        })
+      },
+      ({ conversationId: cid }) => {
+        if (cid && !conversationId) setConversationId(cid)
+        setMessages(prev => {
+          const updated = [...prev]
+          const last = updated[updated.length - 1]
+          if (last?.role === 'agent') updated[updated.length - 1] = { ...last, streaming: false }
+          return updated
+        })
+        setSending(false)
+      },
+      (err) => {
+        setMessages(prev => {
+          const without = prev.filter((m, i) => !(i === prev.length - 1 && m.streaming))
+          return [...without, { role: 'error', text: err.message }]
+        })
+        setSending(false)
+      },
+      conversationId,
+    )
   }
 
   return (
@@ -240,10 +262,11 @@ function ChatConsole({ agentId }) {
               'bg-red-50 border border-red-200 text-red-700'
             }`}>
               {m.text}
+              {m.streaming && <span className="inline-block animate-pulse ml-0.5 text-slate-400">▌</span>}
             </div>
           </div>
         ))}
-        {sending && (
+        {sending && messages[messages.length - 1]?.role !== 'agent' && (
           <div className="flex justify-start">
             <div className="bg-white border border-slate-200 rounded-xl rounded-bl-none px-4 py-2 text-slate-400 text-sm">
               Thinking…
@@ -262,6 +285,96 @@ function ChatConsole({ agentId }) {
           disabled={sending}
         />
         <Button onClick={send} disabled={sending || !input.trim()}>Send</Button>
+      </div>
+    </Card>
+  )
+}
+
+// ─── AI Evaluation ────────────────────────────────────────────────────────────
+
+function ScoreBadge({ score }) {
+  if (score == null) return null
+  const color = score >= 7 ? 'bg-green-100 text-green-800 border-green-200'
+    : score >= 4 ? 'bg-yellow-100 text-yellow-800 border-yellow-200'
+    : 'bg-red-100 text-red-800 border-red-200'
+  return <span className={`text-sm font-bold px-2.5 py-0.5 rounded-full border ${color}`}>{score}/10</span>
+}
+
+function EvaluateButton({ agentId, stageNum }) {
+  const [loading, setLoading]   = useState(false)
+  const [result, setResult]     = useState(null)
+  const [error, setError]       = useState('')
+  const [open, setOpen]         = useState(true)
+
+  const run = async () => {
+    setLoading(true); setError(''); setResult(null); setOpen(true)
+    try {
+      setResult(await apiCall(`/api/agents/${agentId}/training/${stageNum}/evaluate`, { method: 'POST' }))
+    } catch (err) {
+      setError(err.message)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  return (
+    <div className="mt-2">
+      <Button size="sm" variant="outline" className="w-full text-xs text-blue-700 border-blue-200 hover:bg-blue-50" onClick={run} disabled={loading}>
+        {loading ? 'Evaluating…' : 'Evaluate with AI'}
+      </Button>
+      {error && <p className="mt-2 text-xs text-red-600 px-1">{error}</p>}
+      {result && open && (
+        <div className="mt-3 border border-slate-200 rounded-xl bg-white p-4 space-y-3">
+          <div className="flex items-center justify-between flex-wrap gap-2">
+            <div className="flex items-center gap-2">
+              <ScoreBadge score={result.score} />
+              <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${result.ready ? 'bg-green-50 text-green-700' : 'bg-slate-100 text-slate-600'}`}>
+                {result.ready ? 'Ready' : 'Not yet ready'}
+              </span>
+            </div>
+            <button onClick={() => setOpen(false)} className="text-xs text-slate-400 hover:text-slate-700">Dismiss</button>
+          </div>
+          {result.recommendations?.length > 0 && (
+            <ul className="space-y-1.5">
+              {result.recommendations.map((r, i) => (
+                <li key={i} className="flex gap-2 text-sm text-slate-700"><span className="text-slate-400 shrink-0">-</span>{r}</li>
+              ))}
+            </ul>
+          )}
+        </div>
+      )}
+      {result && !open && (
+        <button onClick={() => setOpen(true)} className="mt-1 text-xs text-slate-400 hover:text-slate-700 w-full text-center">Show result</button>
+      )}
+    </div>
+  )
+}
+
+// ─── Embed Widget Section ─────────────────────────────────────────────────────
+
+function EmbedWidgetSection({ agentId }) {
+  const [copied, setCopied] = useState(false)
+  const origin = typeof window !== 'undefined' ? window.location.origin : 'https://your-domain.com'
+  const snippet = `<iframe\n  src="${origin}/embed/${agentId}?key=YOUR_API_KEY"\n  width="400"\n  height="600"\n  style="border:none;border-radius:12px;box-shadow:0 4px 24px rgba(0,0,0,0.12);"\n></iframe>`
+
+  return (
+    <Card className="p-6 mt-8 bg-slate-50">
+      <h2 className="font-bold text-slate-900 mb-1">Embed Widget</h2>
+      <p className="text-sm text-slate-600 mb-4">Drop this chat widget into any webpage. Visitors authenticate via the API key in the URL.</p>
+      <ol className="text-sm text-slate-600 mb-4 space-y-1 list-decimal list-inside">
+        <li>Generate an API key in the <span className="font-medium">API Keys</span> section above.</li>
+        <li>Replace <code className="font-mono bg-slate-200 px-1 rounded text-xs">YOUR_API_KEY</code> with that key.</li>
+        <li>Paste the snippet into your website HTML.</li>
+      </ol>
+      <div className="relative">
+        <pre className="text-xs bg-slate-900 text-green-400 rounded-lg p-4 overflow-x-auto whitespace-pre">{snippet}</pre>
+        <Button
+          size="sm" variant="outline"
+          className="absolute top-2 right-2 text-xs bg-slate-800 border-slate-600 text-slate-200 hover:bg-slate-700"
+          onClick={() => navigator.clipboard.writeText(snippet).then(() => { setCopied(true); setTimeout(() => setCopied(false), 2000) })}
+        >
+          {copied ? 'Copied!' : 'Copy'}
+        </Button>
       </div>
     </Card>
   )
@@ -338,6 +451,9 @@ export default function AgentTrainingPage() {
             <Link href={`/dashboard/brands/${brandId}/agents/${agentId}/metrics`}>
               <Button variant="outline" size="sm">📊 Metrics</Button>
             </Link>
+            <Link href={`/dashboard/brands/${brandId}/agents/${agentId}/analytics`}>
+              <Button variant="outline" size="sm">Analytics</Button>
+            </Link>
             <span className={`text-sm px-3 py-1 rounded-full font-medium ${STATUS_STYLES[agent.status] ?? STATUS_STYLES.Training}`}>
               {agent.status}
             </span>
@@ -365,15 +481,19 @@ export default function AgentTrainingPage() {
       {/* Stage grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
         {stages.map(stage => (
-          <StageCard
-            key={stage.stage}
-            stage={stage}
-            href={
-              stage.status !== 'Pending'
-                ? `/dashboard/brands/${brandId}/agents/${agentId}/stage/${stage.stage}`
-                : undefined
-            }
-          />
+          <div key={stage.stage}>
+            <StageCard
+              stage={stage}
+              href={
+                stage.status !== 'Pending'
+                  ? `/dashboard/brands/${brandId}/agents/${agentId}/stage/${stage.stage}`
+                  : undefined
+              }
+            />
+            {stage.status === 'In Progress' && (
+              <EvaluateButton agentId={agentId} stageNum={stage.stage} />
+            )}
+          </div>
         ))}
       </div>
 
@@ -414,6 +534,7 @@ export default function AgentTrainingPage() {
         <>
           <ChatConsole agentId={agentId} />
           <ApiKeyManager agentId={agentId} />
+          <EmbedWidgetSection agentId={agentId} />
 
           <Card className="p-6 mt-8 bg-slate-50">
             <h2 className="font-bold text-slate-900 mb-1">Integration</h2>

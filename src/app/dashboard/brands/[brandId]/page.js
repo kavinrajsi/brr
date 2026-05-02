@@ -96,6 +96,9 @@ export default function BrandDetailPage() {
           <Link href={`/dashboard/brands/${brand.id}/scenarios`}>
             <Button variant="outline" className="w-full justify-start">📝 Test Scenarios</Button>
           </Link>
+          <Link href={`/dashboard/brands/${brand.id}/knowledge`}>
+            <Button variant="outline" className="w-full justify-start">📖 Knowledge Base</Button>
+          </Link>
         </div>
       </Card>
 

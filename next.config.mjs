@@ -37,6 +37,14 @@ const nextConfig = {
           },
         ],
       },
+      // Allow embedding the chat widget in any iframe
+      {
+        source: '/embed/:path*',
+        headers: [
+          { key: 'X-Frame-Options', value: 'ALLOWALL' },
+          { key: 'Content-Security-Policy', value: "frame-ancestors *" },
+        ],
+      },
     ]
   },
 }
