@@ -17,7 +17,7 @@ export const metadata = {
 
 export default async function RootLayout({ children }) {
   const gaId = process.env.NEXT_PUBLIC_GA_ID
-  // Nonce comes from src/middleware.js — applied to inline scripts so we can
+  // Nonce comes from src/proxy.js — applied to inline scripts so we can
   // drop 'unsafe-inline' from the CSP script-src.
   const nonce = (await headers()).get('x-nonce') ?? ''
 

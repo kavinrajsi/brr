@@ -3,8 +3,11 @@ import { NextResponse } from 'next/server'
 // Generate a per-request nonce so the CSP can drop 'unsafe-inline' from
 // script-src. Inline scripts in the layout (Google Analytics) reference
 // the nonce via headers() in the server component.
+//
+// Next.js 16 renamed `middleware.js` to `proxy.js` and the export from
+// `middleware()` to `proxy()`. Same runtime semantics; same matcher config.
 
-export function middleware(request) {
+export function proxy(request) {
   const isDev = process.env.NODE_ENV === 'development'
 
   // 16 random bytes → 24-char base64. Web Crypto is available in the edge runtime.

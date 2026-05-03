@@ -16,10 +16,10 @@ const nextConfig = {
       {
         source: '/(.*)',
         headers: [
-          // CSP for app pages is set per-request in src/middleware.js so we
-          // can include a fresh nonce. These static headers cover everything
-          // that doesn't pass through the middleware (API routes, static
-          // assets) — they're cheap and additive.
+          // CSP for app pages is set per-request in src/proxy.js so we can
+          // include a fresh nonce. These static headers cover everything
+          // that doesn't pass through the proxy (API routes, static assets)
+          // — they're cheap and additive.
           { key: 'X-Content-Type-Options', value: 'nosniff' },
           { key: 'X-Frame-Options', value: 'DENY' },
           { key: 'X-XSS-Protection', value: '1; mode=block' },
