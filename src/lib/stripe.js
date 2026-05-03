@@ -5,6 +5,11 @@ export const stripe = process.env.STRIPE_SECRET_KEY
   ? new Stripe(process.env.STRIPE_SECRET_KEY, { apiVersion: '2025-04-30.basil' })
   : null
 
+// Sentinel for "unlimited" plan limits. Avoid Infinity here — JSON.stringify
+// turns Infinity into null, which would silently zero out Enterprise quotas
+// the moment any limit gets cached or sent over the wire.
+export const UNLIMITED = Number.MAX_SAFE_INTEGER
+
 export const PLANS = {
   free: {
     id: 'free',
@@ -30,7 +35,7 @@ export const PLANS = {
     price: 99,
     interval: 'month',
     stripePriceId: process.env.STRIPE_ENTERPRISE_PRICE_ID ?? null,
-    limits: { brands: Infinity, agents: Infinity },
+    limits: { brands: UNLIMITED, agents: UNLIMITED },
     features: ['Unlimited brands', 'Unlimited agents', 'Custom training', 'Dedicated support', 'Advanced analytics', 'API access'],
   },
 }
@@ -40,13 +45,22 @@ export function isStripeConfigured() {
 }
 
 // Returns the plan limits for a user based on their active subscription.
-// Falls back to the Free plan if no subscription row exists.
+// Falls back to the Free plan if no subscription row exists. Uses
+// .maybeSingle() so a transient query error is logged and propagated
+// rather than silently downgrading a paid user.
 export async function getUserPlanLimits(userId, supabase) {
-  const { data } = await supabase
+  const { data, error } = await supabase
     .from('subscriptions')
     .select('plan, status')
     .eq('user_id', userId)
-    .single()
+    .maybeSingle()
+
+  if (error) {
+    // Don't swallow — a paid user shouldn't get downgraded because of a
+    // transient Postgres blip. The caller can decide whether to retry.
+    console.error('[stripe] getUserPlanLimits failed:', error.message)
+    throw new Error('Failed to load subscription')
+  }
 
   const activePlan = data?.status === 'active' ? (data.plan ?? 'free') : 'free'
   return PLANS[activePlan]?.limits ?? PLANS.free.limits
