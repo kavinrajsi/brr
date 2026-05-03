@@ -126,8 +126,12 @@ export default function AgentTestPage() {
             )}
           </Card>
 
+        </div>
+
+        {/* Selected scenario details + Chat console */}
+        <div className="lg:col-span-2 space-y-4">
           {selectedScenario && (
-            <Card className="p-4 mt-4">
+            <Card className="p-4">
               <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Selected: {selectedKey}</p>
 
               {selectedScenario.input_prompt && (
@@ -137,17 +141,20 @@ export default function AgentTestPage() {
                 </div>
               )}
 
-              {selectedScenario.good_example && (
-                <div className="mb-3 bg-green-50 border border-green-100 rounded p-2">
-                  <p className="text-xs font-medium text-green-700 mb-0.5">Good Example</p>
-                  <p className="text-xs text-green-800">{selectedScenario.good_example}</p>
-                </div>
-              )}
-
-              {selectedScenario.bad_example && (
-                <div className="mb-3 bg-red-50 border border-red-100 rounded p-2">
-                  <p className="text-xs font-medium text-red-700 mb-0.5">Bad Example</p>
-                  <p className="text-xs text-red-800">{selectedScenario.bad_example}</p>
+              {(selectedScenario.good_example || selectedScenario.bad_example) && (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-3">
+                  {selectedScenario.good_example && (
+                    <div className="bg-green-50 border border-green-100 rounded p-2">
+                      <p className="text-xs font-medium text-green-700 mb-0.5">Good Example</p>
+                      <p className="text-xs text-green-800">{selectedScenario.good_example}</p>
+                    </div>
+                  )}
+                  {selectedScenario.bad_example && (
+                    <div className="bg-red-50 border border-red-100 rounded p-2">
+                      <p className="text-xs font-medium text-red-700 mb-0.5">Bad Example</p>
+                      <p className="text-xs text-red-800">{selectedScenario.bad_example}</p>
+                    </div>
+                  )}
                 </div>
               )}
 
@@ -170,10 +177,7 @@ export default function AgentTestPage() {
               )}
             </Card>
           )}
-        </div>
 
-        {/* Chat console */}
-        <div className="lg:col-span-2">
           <ChatConsole
             key={selectedKey ?? 'free'}
             agentId={agentId}
