@@ -43,7 +43,8 @@ function buildStage1Fix(brandName, config) {
   ]
 
   const fieldSummary = KEY_FIELDS.map(({ field, label }) => {
-    const val = config[field]?.trim?.()
+    const raw = config[field]?.trim?.() ?? ''
+    const val = raw.length > 200 ? raw.slice(0, 200) + '…' : raw
     return `  ${label} (${field}): ${val ? `"${val}"` : 'EMPTY'}`
   }).join('\n')
 
@@ -338,8 +339,8 @@ export async function POST(req, { params }) {
   try {
     aiResponse = await anthropic.messages.create({
       model: 'claude-haiku-4-5-20251001',
-      max_tokens: 1500,
-      system: 'You are an expert brand AI training assistant. Generate specific, realistic content to fill in missing training data. Respond only with valid JSON.',
+      max_tokens: 3000,
+      system: 'You are an expert brand AI training assistant. Generate specific, realistic content to fill in missing training data. Respond only with valid JSON. Keep each suggested value concise (1-3 sentences max).',
       messages: [{ role: 'user', content: userMessage }],
     })
   } catch (err) {
