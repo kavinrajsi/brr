@@ -24,7 +24,7 @@ function buildStage1Prompt(brandName, config) {
     Physique:     ['physique', 'tagline', 'signature_products'],
     Personality:  ['personality_traits', 'tone', 'response_style'],
     Culture:      ['promise', 'key_values', 'culture_beliefs', 'culture_origin'],
-    Relationship: ['relationship_type', 'escalation_triggers', 'prohibited_topics', 'webhook_url'],
+    Relationship: ['relationship_type', 'escalation_triggers', 'prohibited_topics'],
     Reflection:   ['target_audience', 'reflection_archetype', 'customer_values'],
     'Self-image': ['selfimage_feeling', 'selfimage_aspiration', 'response_guidelines'],
   }
