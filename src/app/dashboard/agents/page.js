@@ -1,5 +1,6 @@
 'use client'
 
+import { useState } from 'react'
 import { useAgents } from '@/hooks/useAgents'
 import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -12,7 +13,18 @@ const STATUS_STYLES = {
 }
 
 export default function AgentsPage() {
-  const { agents, isLoading, error } = useAgents()
+  const { agents, isLoading, error, deleteAgent } = useAgents()
+  const [deletingId, setDeletingId] = useState(null)
+
+  async function handleDelete(agent) {
+    if (!confirm(`Delete agent "${agent.name}"? This cannot be undone.`)) return
+    setDeletingId(agent.id)
+    try {
+      await deleteAgent(agent.id)
+    } finally {
+      setDeletingId(null)
+    }
+  }
 
   return (
     <div>
@@ -70,9 +82,19 @@ export default function AgentsPage() {
                     {new Date(agent.created_at).toLocaleDateString()}
                   </td>
                   <td className="px-6 py-4 text-right">
-                    <Link href={`/dashboard/brands/${agent.brand_id}/agents/${agent.id}`}>
-                      <Button variant="outline" size="sm">View Training</Button>
-                    </Link>
+                    <div className="flex items-center justify-end gap-2">
+                      <Link href={`/dashboard/brands/${agent.brand_id}/agents/${agent.id}`}>
+                        <Button variant="outline" size="sm">View Training</Button>
+                      </Link>
+                      <Button
+                        variant="destructive"
+                        size="sm"
+                        disabled={deletingId === agent.id}
+                        onClick={() => handleDelete(agent)}
+                      >
+                        {deletingId === agent.id ? 'Deleting…' : 'Delete'}
+                      </Button>
+                    </div>
                   </td>
                 </tr>
               ))}
