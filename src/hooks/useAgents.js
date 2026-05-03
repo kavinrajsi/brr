@@ -42,5 +42,14 @@ export function useAgents(brandId = null) {
     setAgents(prev => prev.filter(a => a.id !== agentId))
   }, [])
 
-  return { agents, isLoading, error, fetchAgents, createAgent, deleteAgent }
+  const updateAgent = useCallback(async (agentId, updates) => {
+    const updated = await apiCall(`/api/agents/${agentId}`, {
+      method: 'PUT',
+      body: JSON.stringify(updates),
+    })
+    setAgents(prev => prev.map(a => a.id === agentId ? { ...a, ...updated } : a))
+    return updated
+  }, [])
+
+  return { agents, isLoading, error, fetchAgents, createAgent, updateAgent, deleteAgent }
 }
