@@ -571,8 +571,8 @@ function Stage6({ results, onChange }) {
 
 function ScoreBadge({ score }) {
   if (score == null) return null
-  const color = score >= 10 ? 'bg-green-100 text-green-800 border-green-200'
-    : score >= 7 ? 'bg-yellow-100 text-yellow-800 border-yellow-200'
+  const color = score >= 8 ? 'bg-green-100 text-green-800 border-green-200'
+    : score >= 6 ? 'bg-yellow-100 text-yellow-800 border-yellow-200'
     : 'bg-red-100 text-red-800 border-red-200'
   return <span className={`text-sm font-bold px-2.5 py-0.5 rounded-full border ${color}`}>{score}/10</span>
 }

@@ -310,7 +310,7 @@ export async function POST(req, { params }) {
     const parsed = parseAnthropicJson(rawText)
     const score = Number(parsed.score)
     if (isNaN(score) || score < 1 || score > 10) throw new Error('score out of range')
-    const ready = Boolean(parsed.ready ?? score >= 10)
+    const ready = Boolean(parsed.ready ?? score >= 8)
     const recommendations = Array.isArray(parsed.recommendations)
       ? parsed.recommendations.slice(0, 3).map(String)
       : []
