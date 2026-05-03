@@ -55,7 +55,7 @@ const ONBOARDING_CHECKS = [
   },
 ]
 
-function Stage1({ brand, brandConfig, results, onChange }) {
+function Stage1({ brand, brandConfig }) {
   const cfg = brandConfig?.config ?? {}
   const configLoaded = !!brandConfig
 
@@ -68,11 +68,6 @@ function Stage1({ brand, brandConfig, results, onChange }) {
       </p>
       {ONBOARDING_CHECKS.map(item => {
         const verified = configLoaded ? item.verify(brand, cfg) : false
-
-        // keep results in sync when verification changes
-        if (configLoaded && results[item.id] !== verified) {
-          setTimeout(() => onChange({ ...results, [item.id]: verified }), 0)
-        }
 
         return (
           <div
@@ -678,7 +673,7 @@ function AiFixLoading({ step }) {
 
 // ─── AI Fix Panel ─────────────────────────────────────────────────────────────
 
-function AiFixPanel({ fixResult, applying, onApply, onDismiss }) {
+function AiFixPanel({ fixResult, applying, applyError, onApply, onDismiss }) {
   if (!fixResult) return null
 
   const { summary, changes } = fixResult
@@ -723,18 +718,23 @@ function AiFixPanel({ fixResult, applying, onApply, onDismiss }) {
         )}
       </div>
 
-      <div className="flex gap-2 px-5 py-3 border-t border-violet-200 bg-violet-50">
-        <Button
-          size="sm"
-          onClick={onApply}
-          disabled={applying}
-          className="bg-violet-600 hover:bg-violet-700 text-white"
-        >
-          {applying ? 'Applying…' : 'Apply Changes'}
-        </Button>
-        <Button size="sm" variant="outline" onClick={onDismiss} disabled={applying}>
-          Dismiss
-        </Button>
+      <div className="px-5 py-3 border-t border-violet-200 bg-violet-50 space-y-2">
+        {applyError && (
+          <p className="text-xs text-red-700 bg-red-50 border border-red-200 rounded px-3 py-2">{applyError}</p>
+        )}
+        <div className="flex gap-2">
+          <Button
+            size="sm"
+            onClick={onApply}
+            disabled={applying}
+            className="bg-violet-600 hover:bg-violet-700 text-white"
+          >
+            {applying ? 'Applying…' : 'Apply Changes'}
+          </Button>
+          <Button size="sm" variant="outline" onClick={onDismiss} disabled={applying}>
+            Dismiss
+          </Button>
+        </div>
       </div>
     </div>
   )
@@ -775,6 +775,7 @@ export default function StagePage() {
   const [fixResult, setFixResult] = useState(null)
   const [isApplying, setIsApplying] = useState(false)
   const [fixError, setFixError] = useState('')
+  const [applyError, setApplyError] = useState('')
 
   const stage = getStage(num)
 
@@ -796,6 +797,15 @@ export default function StagePage() {
       ]).then(([b, cfg]) => { setBrand(b); setBrandConfig(cfg) }).catch(() => {})
     }
   }, [num, brandId])
+
+  // Re-verify all Stage 1 checks atomically whenever brand data or config changes
+  useEffect(() => {
+    if (num !== 1 || !brand || !brandConfig) return
+    const cfg = brandConfig?.config ?? {}
+    const verified = {}
+    ONBOARDING_CHECKS.forEach(item => { verified[item.id] = item.verify(brand, cfg) })
+    setResults(verified)
+  }, [brand, brandConfig, num])
 
   const handleSave = async (complete = false) => {
     setSaveError('')
@@ -869,24 +879,25 @@ export default function StagePage() {
   }
 
   const handleApply = async () => {
-    if (!fixResult?.patch) return
+    if (!fixResult?.patch) {
+      setApplyError('No changes to apply — try running AI Fix again.')
+      return
+    }
     setIsApplying(true)
+    setApplyError('')
     try {
       const { patch, brandId: fixBrandId } = fixResult
 
       if (patch.type === 'brand_config') {
-        // Merge new config fields into existing brand config
         const currentCfg = brandConfig?.config ?? {}
         const merged = { ...currentCfg, ...patch.config }
         await apiCall(`/api/brands/${fixBrandId}/config`, {
           method: 'PUT',
           body: JSON.stringify({ config: merged }),
         })
-        // Refresh brand config so Stage 1 re-validates
         const updated = await apiCall(`/api/brands/${fixBrandId}/config`)
         setBrandConfig(updated)
       } else {
-        // Merge into existing training_progress
         const newResults = patch.validation_results
           ? { ...results, ...patch.validation_results }
           : results
@@ -906,7 +917,7 @@ export default function StagePage() {
       setSaved(true)
       setTimeout(() => setSaved(false), 3000)
     } catch (err) {
-      setFixError(err.message)
+      setApplyError(err.message || 'Failed to apply changes — please try again.')
     } finally {
       setIsApplying(false)
     }
@@ -960,7 +971,7 @@ export default function StagePage() {
       )}
 
       <Card className="p-8 mb-6">
-        {num === 1 && <Stage1 brand={brand} brandConfig={brandConfig} results={results} onChange={setResults} />}
+        {num === 1 && <Stage1 brand={brand} brandConfig={brandConfig} />}
         {num === 2 && <Stage2 scores={scores} onChange={setScores} scenarios={scenarios} brandId={brandId} agentId={agentId} />}
         {num === 3 && <Stage3 results={results} onChange={setResults} />}
         {num === 4 && <Stage4 results={results} onChange={setResults} />}
@@ -1040,8 +1051,9 @@ export default function StagePage() {
         <AiFixPanel
           fixResult={fixResult}
           applying={isApplying}
+          applyError={applyError}
           onApply={handleApply}
-          onDismiss={() => { setFixResult(null); setFixError('') }}
+          onDismiss={() => { setFixResult(null); setFixError(''); setApplyError('') }}
         />
       )}
 
