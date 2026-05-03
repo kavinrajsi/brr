@@ -52,8 +52,9 @@ Evaluate:
 2. Are the critical fields (tone, promise, prohibited topics, escalation triggers) specific enough to guide an AI agent?
 3. Is there anything vague, placeholder-like, or missing that would prevent the agent from representing the brand accurately?
 
-Score 1-10 (10 = ready to advance). Give 3 specific, actionable recommendations.
-Respond ONLY with JSON: { "score": <1-10>, "ready": <true if score is 10>, "recommendations": ["...", "...", "..."] }`
+Score 1-10. Give 10 if all criteria are genuinely met — do not lower the score just to justify recommendations.
+If score is 10, recommendations may be empty. If score is below 10, give up to 3 specific actionable recommendations.
+Respond ONLY with JSON: { "score": <1-10>, "ready": <true if score >= 10>, "recommendations": [] }`
 }
 
 function buildStage2Prompt(brandName, config, testScores, scenarios, knowledgeDocs) {
@@ -97,8 +98,9 @@ Evaluate:
 3. Is the knowledge base sufficient to support the scenarios being tested?
 4. What specific areas need improvement before advancing?
 
-Score 1-10 (10 = ready to advance). Give 3 specific, actionable recommendations.
-Respond ONLY with JSON: { "score": <1-10>, "ready": <true if score is 10>, "recommendations": ["...", "...", "..."] }`
+Score 1-10. Give 10 if all criteria are genuinely met — do not lower the score just to justify recommendations.
+If score is 10, recommendations may be empty. If score is below 10, give up to 3 specific actionable recommendations.
+Respond ONLY with JSON: { "score": <1-10>, "ready": <true if score >= 10>, "recommendations": [] }`
 }
 
 function buildStage3Prompt(brandName, config, validationResults) {
@@ -132,8 +134,9 @@ Evaluate:
 3. Do the notes reflect real brand voice monitoring (tone adherence, prohibited topics respected, escalation handling)?
 4. What should be reviewed more rigorously before advancing?
 
-Score 1-10 (10 = ready to advance). Give 3 specific, actionable recommendations.
-Respond ONLY with JSON: { "score": <1-10>, "ready": <true if score is 10>, "recommendations": ["...", "...", "..."] }`
+Score 1-10. Give 10 if all criteria are genuinely met — do not lower the score just to justify recommendations.
+If score is 10, recommendations may be empty. If score is below 10, give up to 3 specific actionable recommendations.
+Respond ONLY with JSON: { "score": <1-10>, "ready": <true if score >= 10>, "recommendations": [] }`
 }
 
 function buildStage4Prompt(brandName, config, validationResults) {
@@ -170,8 +173,9 @@ Evaluate:
 3. For any failed or missing tests: what specifically needs to improve?
 4. Is the evaluator's judgment (notes) rigorous, or are tests being passed too easily?
 
-Score 1-10 (10 = ready to certify). Give 3 specific, actionable recommendations.
-Respond ONLY with JSON: { "score": <1-10>, "ready": <true if score is 10>, "recommendations": ["...", "...", "..."] }`
+Score 1-10. Give 10 if all criteria are genuinely met — do not lower the score just to justify recommendations.
+If score is 10, recommendations may be empty. If score is below 10, give up to 3 specific actionable recommendations.
+Respond ONLY with JSON: { "score": <1-10>, "ready": <true if score >= 10>, "recommendations": [] }`
 }
 
 function buildStage5Prompt(brandName, config, validationResults) {
@@ -206,8 +210,9 @@ Evaluate:
 3. Do the notes show active monitoring of brand voice, prohibited topics, and escalation handling?
 4. Does the monthly review summarise performance trends, not just state "all good"?
 
-Score 1-10 (10 = healthy deployment). Give 3 specific, actionable recommendations.
-Respond ONLY with JSON: { "score": <1-10>, "ready": <true if score is 10>, "recommendations": ["...", "...", "..."] }`
+Score 1-10. Give 10 if all criteria are genuinely met — do not lower the score just to justify recommendations.
+If score is 10, recommendations may be empty. If score is below 10, give up to 3 specific actionable recommendations.
+Respond ONLY with JSON: { "score": <1-10>, "ready": <true if score >= 10>, "recommendations": [] }`
 }
 
 function buildStage6Prompt(brandName, config, validationResults) {
@@ -238,8 +243,9 @@ Evaluate:
 3. Are re-training cycles being triggered when the BRR changes, and are the notes substantive?
 4. Is this brand keeping its AI agent current with how the brand actually operates?
 
-Score 1-10 (10 = healthy ongoing learning). Give 3 specific, actionable recommendations.
-Respond ONLY with JSON: { "score": <1-10>, "ready": <true if score is 10>, "recommendations": ["...", "...", "..."] }`
+Score 1-10. Give 10 if all criteria are genuinely met — do not lower the score just to justify recommendations.
+If score is 10, recommendations may be empty. If score is below 10, give up to 3 specific actionable recommendations.
+Respond ONLY with JSON: { "score": <1-10>, "ready": <true if score >= 10>, "recommendations": [] }`
 }
 
 // ─── Route handler ────────────────────────────────────────────────────────────
@@ -310,7 +316,7 @@ export async function POST(req, { params }) {
     const parsed = parseAnthropicJson(rawText)
     const score = Number(parsed.score)
     if (isNaN(score) || score < 1 || score > 10) throw new Error('score out of range')
-    const ready = Boolean(parsed.ready ?? score >= 8)
+    const ready = Boolean(parsed.ready ?? score >= 10)
     const recommendations = Array.isArray(parsed.recommendations)
       ? parsed.recommendations.slice(0, 3).map(String)
       : []
