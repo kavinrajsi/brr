@@ -93,19 +93,26 @@ export default function BrandsPage() {
                   <td className="px-6 py-4 text-sm text-slate-600 whitespace-nowrap">
                     {new Date(brand.created_at).toLocaleDateString()}
                   </td>
-                  <td className="px-6 py-4 text-right space-x-2 whitespace-nowrap">
-                    <Link href={`/dashboard/brands/${brand.id}`}>
-                      <Button variant="outline" size="sm">View</Button>
-                    </Link>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => handleDelete(brand.id)}
-                      disabled={deleting === brand.id}
-                      className="text-red-600 hover:text-red-700"
-                    >
-                      {deleting === brand.id ? 'Deleting…' : 'Delete'}
-                    </Button>
+                  <td className="px-6 py-4 text-right">
+                    <div className="flex items-center justify-end gap-2">
+                      <Link href={`/dashboard/brands/${brand.id}`}>
+                        <Button variant="outline" size="icon-sm" title="View Brand">
+                          <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7z"/><circle cx="12" cy="12" r="3"/></svg>
+                        </Button>
+                      </Link>
+                      <Button
+                        variant="destructive"
+                        size="icon-sm"
+                        title="Delete Brand"
+                        onClick={() => handleDelete(brand.id)}
+                        disabled={deleting === brand.id}
+                      >
+                        {deleting === brand.id
+                          ? <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4 animate-spin" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg>
+                          : <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4h6v2"/></svg>
+                        }
+                      </Button>
+                    </div>
                   </td>
                 </tr>
               ))}

@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useParams } from 'next/navigation'
 import { useBrandConfig } from '@/hooks/useBrandConfig'
 import { Card } from '@/components/ui/card'
@@ -50,6 +50,42 @@ const STEPS = [
   },
 ]
 
+const LABEL_TO_KEY = {
+  'Visual Identity': 'physique',
+  'Tagline / Slogan': 'tagline',
+  'Signature Products or Services': 'signature_products',
+  'Character Traits': 'personality_traits',
+  'Tone of Voice': 'tone',
+  'Response Style': 'response_style',
+  'Brand Promise / Soul': 'promise',
+  'Core Values': 'key_values',
+  'Beliefs & Principles': 'culture_beliefs',
+  'Origin & Mission': 'culture_origin',
+  'Relationship Type': 'relationship_type',
+  'Escalation Triggers': 'escalation_triggers',
+  'Prohibited Topics': 'prohibited_topics',
+  'Webhook URL': 'webhook_url',
+  'Target Audience': 'target_audience',
+  'Customer Archetype': 'reflection_archetype',
+  'Customer Values & Aspirations': 'customer_values',
+  'How Customers Feel': 'selfimage_feeling',
+  'Aspiration Fulfilled': 'selfimage_aspiration',
+  'AI Response Guidelines': 'response_guidelines',
+}
+
+function parseBrandPrismMd(markdown) {
+  const result = {}
+  const regex = /\*\*(.+?):\*\*\s*([\s\S]*?)(?=\n\*\*|\n##|\n#\s|$)/g
+  let match
+  while ((match = regex.exec(markdown)) !== null) {
+    const label = match[1].trim()
+    const value = match[2].trim()
+    const key = LABEL_TO_KEY[label]
+    if (key && value) result[key] = value
+  }
+  return result
+}
+
 function Field({ label, hint, children }) {
   return (
     <div className="space-y-1.5">
@@ -68,6 +104,9 @@ export default function BrandConfigPage() {
   const [savedData, setSavedData] = useState({})
   const [saveError, setSaveError] = useState('')
   const [saveSuccess, setSaveSuccess] = useState(false)
+  const [importError, setImportError] = useState('')
+  const [importCount, setImportCount] = useState(null)
+  const importRef = useRef(null)
 
   useEffect(() => {
     if (config) {
@@ -79,6 +118,27 @@ export default function BrandConfigPage() {
   const isDirty = JSON.stringify(formData) !== JSON.stringify(savedData)
 
   const set = (key, value) => setFormData(prev => ({ ...prev, [key]: value }))
+
+  const handleImport = (e) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    e.target.value = ''
+    setImportError('')
+    setImportCount(null)
+    const reader = new FileReader()
+    reader.onload = (ev) => {
+      const parsed = parseBrandPrismMd(ev.target.result)
+      const count = Object.keys(parsed).length
+      if (count === 0) {
+        setImportError('No recognisable Brand Prism fields found in this file.')
+        return
+      }
+      setFormData(prev => ({ ...prev, ...parsed }))
+      setImportCount(count)
+      setTimeout(() => setImportCount(null), 4000)
+    }
+    reader.readAsText(file)
+  }
 
   const handleSave = async () => {
     setSaveError('')
@@ -121,9 +181,21 @@ export default function BrandConfigPage() {
             <h1 className="text-3xl font-bold text-slate-900">Brand Prism</h1>
             <p className="text-slate-600 mt-1">Define your brand identity across Kapferer's six facets</p>
           </div>
-          <Link href={`/dashboard/brands/${brandId}/prism`}>
-            <Button variant="outline">View Brand Prism →</Button>
-          </Link>
+          <div className="flex gap-2">
+            <input
+              ref={importRef}
+              type="file"
+              accept=".md,text/markdown"
+              className="hidden"
+              onChange={handleImport}
+            />
+            <Button variant="outline" onClick={() => importRef.current?.click()}>
+              Import .md
+            </Button>
+            <Link href={`/dashboard/brands/${brandId}/prism`}>
+              <Button variant="outline">View Brand Prism →</Button>
+            </Link>
+          </div>
         </div>
       </div>
 
@@ -151,6 +223,16 @@ export default function BrandConfigPage() {
       {saveError && (
         <Alert variant="destructive" className="mb-6">
           <AlertDescription>{saveError}</AlertDescription>
+        </Alert>
+      )}
+      {importCount !== null && (
+        <Alert className="mb-6 bg-blue-50 border-blue-200">
+          <AlertDescription className="text-blue-800">✓ Imported {importCount} fields from markdown — review and save to apply.</AlertDescription>
+        </Alert>
+      )}
+      {importError && (
+        <Alert variant="destructive" className="mb-6">
+          <AlertDescription>{importError}</AlertDescription>
         </Alert>
       )}
 

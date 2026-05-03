@@ -26,7 +26,7 @@ export async function GET(req) {
 
   return Response.json(
     { data, pagination: { total: count, page, limit, pages: Math.ceil(count / limit) } },
-    { headers: { 'Cache-Control': 'private, max-age=300' } }
+    { headers: { 'Cache-Control': 'no-store' } }
   )
 }
 

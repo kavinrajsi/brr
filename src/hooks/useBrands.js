@@ -42,11 +42,7 @@ export function useBrands() {
 
   // TODO: implement deleteBrand
   const deleteBrand = useCallback(async (brandId) => {
-    try {
-      await apiCall(`/api/brands/${brandId}`, { method: 'DELETE' })
-    } catch (err) {
-      if (!err.message?.includes('404') && !err.message?.toLowerCase().includes('not found')) throw err
-    }
+    await apiCall(`/api/brands/${brandId}`, { method: 'DELETE' })
     setBrands(prev => prev.filter(b => b.id !== brandId))
   }, [])
 
