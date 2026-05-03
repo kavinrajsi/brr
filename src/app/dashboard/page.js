@@ -23,7 +23,7 @@ export default function DashboardPage() {
   const [isLoading, setIsLoading] = useState(true)
 
   useEffect(() => {
-    apiCall('/api/admin/stats')
+    apiCall('/api/dashboard/stats')
       .then(data => setStats(data.stats))
       .catch(() => {})
       .finally(() => setIsLoading(false))

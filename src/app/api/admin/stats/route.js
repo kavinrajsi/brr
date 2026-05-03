@@ -1,59 +1,49 @@
-import { getUserFromRequest, getAdminClient } from '@/lib/supabase-server'
+import { getUserFromRequest, getAdminClient, isPlatformAdmin } from '@/lib/supabase-server'
 
+// Platform-wide stats — visible only to ADMIN_USER_IDS allowlist.
+// For per-user dashboard stats, see /api/dashboard/stats.
 export async function GET(req) {
   const user = await getUserFromRequest(req)
   if (!user) return Response.json({ error: 'Unauthorized' }, { status: 401 })
+  if (!isPlatformAdmin(user)) return Response.json({ error: 'Forbidden' }, { status: 403 })
 
   const supabase = getAdminClient()
 
-  // Resolve brand IDs first — .in() requires a plain array, not a subquery
-  const { data: brandRows } = await supabase
-    .from('brands')
-    .select('id')
-    .eq('user_id', user.id)
-
-  const brandIds = (brandRows ?? []).map(b => b.id)
-
   const [
+    { count: totalUsers },
     { count: totalBrands },
     { count: totalAgents },
     { count: inTraining },
     { count: certified },
+    { count: deployed },
     { count: totalOrgs },
     { count: totalScenarios },
+    { count: totalConversations },
+    { data: { users } = {} },
   ] = await Promise.all([
-    supabase.from('brands').select('*', { count: 'exact', head: true }).eq('user_id', user.id),
-    brandIds.length
-      ? supabase.from('agents').select('*', { count: 'exact', head: true }).in('brand_id', brandIds)
-      : Promise.resolve({ count: 0 }),
-    brandIds.length
-      ? supabase.from('agents').select('*', { count: 'exact', head: true }).eq('status', 'Training').in('brand_id', brandIds)
-      : Promise.resolve({ count: 0 }),
-    brandIds.length
-      ? supabase.from('agents').select('*', { count: 'exact', head: true }).eq('status', 'Certified').in('brand_id', brandIds)
-      : Promise.resolve({ count: 0 }),
-    supabase.from('organization_members').select('*', { count: 'exact', head: true }).eq('user_id', user.id),
-    brandIds.length
-      ? supabase.from('test_scenarios').select('*', { count: 'exact', head: true }).in('brand_id', brandIds)
-      : Promise.resolve({ count: 0 }),
+    supabase.from('subscriptions').select('*', { count: 'exact', head: true }),
+    supabase.from('brands').select('*', { count: 'exact', head: true }),
+    supabase.from('agents').select('*', { count: 'exact', head: true }),
+    supabase.from('agents').select('*', { count: 'exact', head: true }).eq('status', 'Training'),
+    supabase.from('agents').select('*', { count: 'exact', head: true }).eq('status', 'Certified'),
+    supabase.from('agents').select('*', { count: 'exact', head: true }).eq('status', 'Deployed'),
+    supabase.from('organizations').select('*', { count: 'exact', head: true }),
+    supabase.from('test_scenarios').select('*', { count: 'exact', head: true }),
+    supabase.from('agent_conversations').select('*', { count: 'exact', head: true }),
+    supabase.auth.admin.listUsers({ perPage: 1 }), // for total users count via metadata
   ])
-
-  const { data: recentBrands } = await supabase
-    .from('brands')
-    .select('id, name, status, current_stage, created_at')
-    .eq('user_id', user.id)
-    .order('created_at', { ascending: false })
-    .limit(5)
 
   return Response.json({
     stats: {
+      totalUsers: users?.length ?? totalUsers ?? 0,
       totalBrands: totalBrands ?? 0,
       totalAgents: totalAgents ?? 0,
       inTraining: inTraining ?? 0,
       certified: certified ?? 0,
+      deployed: deployed ?? 0,
       totalOrgs: totalOrgs ?? 0,
       totalScenarios: totalScenarios ?? 0,
+      totalConversations: totalConversations ?? 0,
     },
-    recentBrands: recentBrands ?? [],
   })
 }

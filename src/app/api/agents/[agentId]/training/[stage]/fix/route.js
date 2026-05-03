@@ -1,5 +1,5 @@
 import { getUserFromRequest, getAdminClient, dbError } from '@/lib/supabase-server'
-import { anthropic, isAnthropicConfigured } from '@/lib/anthropic'
+import { anthropic, isAnthropicConfigured, MODEL } from '@/lib/anthropic'
 import { isFilled, formatValue } from '@/lib/brand-config'
 
 const fmt = (v, fallback = 'not defined') => isFilled(v) ? formatValue(v) : fallback
@@ -418,7 +418,7 @@ export async function POST(req, { params }) {
   let aiResponse
   try {
     aiResponse = await anthropic.messages.create({
-      model: 'claude-haiku-4-5-20251001',
+      model: MODEL,
       max_tokens: 6000,
       system: 'You are an expert brand AI training assistant. Generate specific, realistic content to fill in missing training data. Respond only with valid JSON. Keep each suggested value concise (1-3 sentences max).',
       messages: [{ role: 'user', content: userMessage }],

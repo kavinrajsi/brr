@@ -13,7 +13,10 @@ export async function GET(req) {
     supabase.from('subscriptions').select('user_id, plan, status, current_period_end, updated_at, stripe_customer_id'),
   ])
 
-  if (authErr) return Response.json({ error: authErr.message }, { status: 500 })
+  if (authErr) {
+    console.error('[admin/users]', authErr.message)
+    return Response.json({ error: 'Failed to load users' }, { status: 500 })
+  }
 
   const subsByUserId = Object.fromEntries((subscriptions ?? []).map(s => [s.user_id, s]))
 

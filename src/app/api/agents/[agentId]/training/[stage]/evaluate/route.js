@@ -1,5 +1,5 @@
 import { getUserFromRequest, getAdminClient, dbError } from '@/lib/supabase-server'
-import { anthropic, isAnthropicConfigured } from '@/lib/anthropic'
+import { anthropic, isAnthropicConfigured, MODEL } from '@/lib/anthropic'
 import { isFilled, formatValue } from '@/lib/brand-config'
 
 // Coerce config field for inline rendering: returns the formatted string or fallback
@@ -306,7 +306,7 @@ export async function POST(req, { params }) {
   let evaluationResponse
   try {
     evaluationResponse = await anthropic.messages.create({
-      model: 'claude-haiku-4-5-20251001',
+      model: MODEL,
       max_tokens: 600,
       system: 'You are an expert brand AI training evaluator. Assess agent readiness based on the specific stage criteria provided. Respond only with valid JSON.',
       messages: [{ role: 'user', content: userMessage }],

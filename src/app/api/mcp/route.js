@@ -3,7 +3,8 @@ import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { WebStandardStreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/webStandardStreamableHttp.js'
 import { z } from 'zod'
 import { getAdminClient } from '@/lib/supabase-server'
-import { anthropic, isAnthropicConfigured, buildBrandSystemPrompt } from '@/lib/anthropic'
+import { anthropic, isAnthropicConfigured, buildBrandSystemPrompt, MODEL } from '@/lib/anthropic'
+import { checkRateLimit } from '@/lib/rate-limiter'
 
 export const runtime = 'nodejs'
 
@@ -90,7 +91,7 @@ function buildMcpServer(supabase, authedAgentId) {
       const systemPrompt = buildBrandSystemPrompt(brandName, config)
 
       const response = await anthropic.messages.create({
-        model: 'claude-haiku-4-5-20251001',
+        model: MODEL,
         max_tokens: 512,
         system: systemPrompt,
         messages: [{ role: 'user', content: message }],
@@ -122,6 +123,10 @@ async function handleMcp(req) {
   if (!authedAgentId) {
     return Response.json({ error: 'Invalid API key' }, { status: 401 })
   }
+
+  // Rate-limit per agent so a leaked key cannot drain the Anthropic budget
+  const limited = checkRateLimit(`mcp:${authedAgentId}`, 60, 60_000)
+  if (limited) return limited
 
   const server = buildMcpServer(supabase, authedAgentId)
   const transport = new WebStandardStreamableHTTPServerTransport({

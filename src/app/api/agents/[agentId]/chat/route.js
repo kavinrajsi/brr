@@ -5,9 +5,11 @@ import {
   isAnthropicConfigured,
   buildBrandSystemPrompt,
   buildCachedSystemBlock,
+  MODEL,
 } from '@/lib/anthropic'
 import { getKnowledgeContext } from '@/lib/knowledge'
 import { triggerHandoff } from '@/lib/webhook'
+import { checkRateLimit } from '@/lib/rate-limiter'
 
 async function resolveAgentFromApiKey(supabase, rawKey, agentId) {
   const keyHash = createHash('sha256').update(rawKey).digest('hex')
@@ -54,6 +56,12 @@ export async function POST(req, { params }) {
   }
 
   if (!authorized) return Response.json({ error: 'Unauthorized' }, { status: 401 })
+
+  // Rate-limit per (agent, auth-source). Both API-key and owner-session callers
+  // are capped — protects the Anthropic budget from a stolen key flooding chat.
+  const rateKey = isOwnerSession ? `chat:owner:${agentId}` : `chat:key:${agentId}`
+  const limited = checkRateLimit(rateKey, 60, 60_000) // 60 req/min per agent
+  if (limited) return limited
 
   if (!isAnthropicConfigured()) {
     return Response.json({ error: 'ANTHROPIC_API_KEY is not configured' }, { status: 503 })
@@ -137,7 +145,7 @@ export async function POST(req, { params }) {
       let accumulated = ''
       try {
         const sdkStream = anthropic.messages.stream({
-          model: 'claude-haiku-4-5-20251001',
+          model: MODEL,
           max_tokens: 512,
           system: [buildCachedSystemBlock(systemPrompt)],
           messages,
@@ -183,7 +191,9 @@ export async function POST(req, { params }) {
 
         send({ type: 'done', escalation, conversationId: activeConversationId })
       } catch (err) {
-        send({ type: 'error', error: err.message ?? 'Stream error' })
+        // Log the real error server-side; never leak Anthropic / Supabase internals to the wire
+        console.error('[chat] stream error:', err?.message)
+        send({ type: 'error', error: 'The agent could not respond — please try again.' })
       } finally {
         controller.close()
       }
