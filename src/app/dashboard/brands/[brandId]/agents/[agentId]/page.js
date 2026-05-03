@@ -18,37 +18,17 @@ const STATUS_STYLES = {
 }
 
 // ─── API Key Manager ──────────────────────────────────────────────────────────
-
-const SESSION_KEY = 'brr_api_keys'
-
-function saveKeyToSession(id, rawKey) {
-  try {
-    const stored = JSON.parse(sessionStorage.getItem(SESSION_KEY) ?? '{}')
-    stored[id] = rawKey
-    sessionStorage.setItem(SESSION_KEY, JSON.stringify(stored))
-  } catch {}
-}
-
-function getKeyFromSession(id) {
-  try {
-    const stored = JSON.parse(sessionStorage.getItem(SESSION_KEY) ?? '{}')
-    return stored[id] ?? null
-  } catch { return null }
-}
-
-function removeKeyFromSession(id) {
-  try {
-    const stored = JSON.parse(sessionStorage.getItem(SESSION_KEY) ?? '{}')
-    delete stored[id]
-    sessionStorage.setItem(SESSION_KEY, JSON.stringify(stored))
-  } catch {}
-}
+//
+// Plaintext API keys are returned by the server EXACTLY ONCE on creation.
+// Previously we cached them in sessionStorage so users could re-show them,
+// but any XSS on the dashboard could exfiltrate every key. Now: copy at
+// creation time, or revoke and create a new one.
 
 function ApiKeyManager({ agentId }) {
   const [keys, setKeys]             = useState([])
   const [newKeyName, setNewKeyName] = useState('')
   const [creating, setCreating]     = useState(false)
-  const [revealed, setRevealed]     = useState(null) // { id, key }
+  const [revealed, setRevealed]     = useState(null) // { id, key } — only the just-created key
   const [loading, setLoading]       = useState(true)
 
   useEffect(() => {
@@ -66,7 +46,7 @@ function ApiKeyManager({ agentId }) {
         body: JSON.stringify({ name: newKeyName || 'Default' }),
       })
       setKeys(prev => [created, ...prev])
-      saveKeyToSession(created.id, created.key)
+      // Show the plaintext key once in the UI; do NOT persist it anywhere
       setRevealed({ id: created.id, key: created.key })
       setNewKeyName('')
     } catch (err) {
@@ -81,23 +61,16 @@ function ApiKeyManager({ agentId }) {
     try {
       await apiCall(`/api/agents/${agentId}/keys/${keyId}`, { method: 'DELETE' })
       setKeys(prev => prev.filter(k => k.id !== keyId))
-      removeKeyFromSession(keyId)
       if (revealed?.id === keyId) setRevealed(null)
     } catch (err) {
       alert('Failed to revoke key: ' + err.message)
     }
   }
 
-  const handleShow = (keyId) => {
-    if (revealed?.id === keyId) { setRevealed(null); return }
-    const raw = getKeyFromSession(keyId)
-    if (raw) setRevealed({ id: keyId, key: raw })
-  }
-
   return (
     <Card className="p-6 mt-8">
       <h2 className="font-bold text-slate-900 mb-1">API Keys</h2>
-      <p className="text-sm text-slate-500 mb-5">Use these keys to call the agent from your own tools.</p>
+      <p className="text-sm text-slate-500 mb-5">Use these keys to call the agent from your own tools. The full key is shown <span className="font-medium">only once</span> at creation — copy it immediately.</p>
 
       {/* Create */}
       <div className="flex gap-2 mb-5">
@@ -147,50 +120,29 @@ function ApiKeyManager({ agentId }) {
         <p className="text-sm text-slate-400">No keys yet.</p>
       ) : (
         <div className="divide-y divide-slate-100">
-          {keys.map(k => {
-            const available = Boolean(getKeyFromSession(k.id))
-            const isShowing = revealed?.id === k.id
-            return (
-              <div key={k.id} className="py-3 flex items-center justify-between gap-4">
-                <div>
-                  <p className="text-sm font-medium text-slate-900">{k.name}</p>
-                  <p className="text-xs text-slate-400 font-mono">{k.key_prefix}</p>
-                </div>
-                <div className="flex items-center gap-2 text-right">
-                  {k.last_used_at && (
-                    <p className="text-xs text-slate-400 hidden sm:block">
-                      Last used {new Date(k.last_used_at).toLocaleDateString()}
-                    </p>
-                  )}
-                  {available ? (
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      className="text-xs"
-                      onClick={() => handleShow(k.id)}
-                    >
-                      {isShowing ? 'Hide' : 'Show'}
-                    </Button>
-                  ) : (
-                    <span
-                      className="text-xs text-slate-300 cursor-default select-none"
-                      title="Key unavailable — revoke and generate a new one to view it"
-                    >
-                      Show
-                    </span>
-                  )}
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    className="text-red-600 border-red-200 hover:bg-red-50"
-                    onClick={() => handleRevoke(k.id)}
-                  >
-                    Revoke
-                  </Button>
-                </div>
+          {keys.map(k => (
+            <div key={k.id} className="py-3 flex items-center justify-between gap-4">
+              <div>
+                <p className="text-sm font-medium text-slate-900">{k.name}</p>
+                <p className="text-xs text-slate-400 font-mono">{k.key_prefix}</p>
               </div>
-            )
-          })}
+              <div className="flex items-center gap-2 text-right">
+                {k.last_used_at && (
+                  <p className="text-xs text-slate-400 hidden sm:block">
+                    Last used {new Date(k.last_used_at).toLocaleDateString()}
+                  </p>
+                )}
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="text-red-600 border-red-200 hover:bg-red-50"
+                  onClick={() => handleRevoke(k.id)}
+                >
+                  Revoke
+                </Button>
+              </div>
+            </div>
+          ))}
         </div>
       )}
     </Card>
@@ -202,31 +154,164 @@ function StageRow({ stage, href }) {
 }
 
 // ─── Embed Widget Section ─────────────────────────────────────────────────────
+// Embed tokens are origin-bound: each token can only be used from the
+// allowed_origin you specify when creating it. The token itself rides in
+// the URL fragment (#token=...) so it never appears in HTTP logs / Referer
+// headers, and the widget strips it from the URL bar after reading.
 
-function EmbedWidgetSection({ agentId }) {
-  const [copied, setCopied] = useState(false)
-  const origin = typeof window !== 'undefined' ? window.location.origin : 'https://your-domain.com'
-  const snippet = `<iframe\n  src="${origin}/embed/${agentId}?key=YOUR_API_KEY"\n  width="400"\n  height="600"\n  style="border:none;border-radius:12px;box-shadow:0 4px 24px rgba(0,0,0,0.12);"\n></iframe>`
+function EmbedTokenManager({ agentId }) {
+  const [tokens, setTokens]         = useState([])
+  const [loading, setLoading]       = useState(true)
+  const [showForm, setShowForm]     = useState(false)
+  const [name, setName]             = useState('')
+  const [origin, setOrigin]         = useState('https://')
+  const [creating, setCreating]     = useState(false)
+  const [revealed, setRevealed]     = useState(null)
+  const [error, setError]           = useState('')
+  const [copied, setCopied]         = useState(false)
+
+  const appOrigin = typeof window !== 'undefined' ? window.location.origin : 'https://your-domain.com'
+
+  useEffect(() => {
+    apiCall(`/api/agents/${agentId}/embed-tokens`)
+      .then(r => setTokens(r.tokens))
+      .catch(() => {})
+      .finally(() => setLoading(false))
+  }, [agentId])
+
+  const handleCreate = async () => {
+    setCreating(true)
+    setError('')
+    try {
+      const created = await apiCall(`/api/agents/${agentId}/embed-tokens`, {
+        method: 'POST',
+        body: JSON.stringify({ name: name || 'Embed', allowed_origin: origin }),
+      })
+      setTokens(prev => [created, ...prev])
+      setRevealed({ id: created.id, token: created.token, allowed_origin: created.allowed_origin })
+      setName('')
+      setOrigin('https://')
+      setShowForm(false)
+    } catch (err) {
+      setError(err.message)
+    } finally {
+      setCreating(false)
+    }
+  }
+
+  const handleRevoke = async (tokenId) => {
+    if (!confirm('Revoke this embed token? Any site using it will stop working.')) return
+    try {
+      await apiCall(`/api/agents/${agentId}/embed-tokens/${tokenId}`, { method: 'DELETE' })
+      setTokens(prev => prev.filter(t => t.id !== tokenId))
+      if (revealed?.id === tokenId) setRevealed(null)
+    } catch (err) {
+      alert('Failed to revoke: ' + err.message)
+    }
+  }
+
+  const snippet = revealed
+    ? `<iframe\n  src="${appOrigin}/embed/${agentId}#token=${revealed.token}"\n  width="400"\n  height="600"\n  style="border:none;border-radius:12px;box-shadow:0 4px 24px rgba(0,0,0,0.12);"\n></iframe>`
+    : null
 
   return (
-    <Card className="p-6 mt-8 bg-slate-50">
+    <Card className="p-6 mt-8">
       <h2 className="font-bold text-slate-900 mb-1">Embed Widget</h2>
-      <p className="text-sm text-slate-600 mb-4">Drop this chat widget into any webpage. Visitors authenticate via the API key in the URL.</p>
-      <ol className="text-sm text-slate-600 mb-4 space-y-1 list-decimal list-inside">
-        <li>Generate an API key in the <span className="font-medium">API Keys</span> section above.</li>
-        <li>Replace <code className="font-mono bg-slate-200 px-1 rounded text-xs">YOUR_API_KEY</code> with that key.</li>
-        <li>Paste the snippet into your website HTML.</li>
-      </ol>
-      <div className="relative">
-        <pre className="text-xs bg-slate-900 text-green-400 rounded-lg p-4 overflow-x-auto whitespace-pre">{snippet}</pre>
-        <Button
-          size="sm" variant="outline"
-          className="absolute top-2 right-2 text-xs bg-slate-800 border-slate-600 text-slate-200 hover:bg-slate-700"
-          onClick={() => navigator.clipboard.writeText(snippet).then(() => { setCopied(true); setTimeout(() => setCopied(false), 2000) })}
-        >
-          {copied ? 'Copied!' : 'Copy'}
-        </Button>
-      </div>
+      <p className="text-sm text-slate-500 mb-5">
+        Drop the chat widget into any webpage. Each embed token is{' '}
+        <span className="font-medium">bound to a single origin</span> — even if
+        the token is intercepted, it cannot be used from another site.
+      </p>
+
+      {!showForm && !revealed && (
+        <Button onClick={() => setShowForm(true)} className="mb-5">+ Create Embed Token</Button>
+      )}
+
+      {showForm && (
+        <div className="border border-slate-200 rounded-lg p-4 mb-5 space-y-3">
+          <div>
+            <label className="text-xs font-medium text-slate-600 block mb-1">Name</label>
+            <Input
+              placeholder="e.g. Marketing Site"
+              value={name}
+              onChange={e => setName(e.target.value)}
+              disabled={creating}
+            />
+          </div>
+          <div>
+            <label className="text-xs font-medium text-slate-600 block mb-1">Allowed Origin</label>
+            <Input
+              placeholder="https://example.com"
+              value={origin}
+              onChange={e => setOrigin(e.target.value)}
+              disabled={creating}
+            />
+            <p className="text-xs text-slate-400 mt-1">Exact origin only. No path or query — just <code className="font-mono">https://example.com</code>.</p>
+          </div>
+          {error && <p className="text-xs text-red-600">{error}</p>}
+          <div className="flex gap-2">
+            <Button onClick={handleCreate} disabled={creating || !origin.trim()}>
+              {creating ? 'Creating…' : 'Create Token'}
+            </Button>
+            <Button variant="outline" onClick={() => { setShowForm(false); setError('') }} disabled={creating}>
+              Cancel
+            </Button>
+          </div>
+        </div>
+      )}
+
+      {revealed && (
+        <div className="mb-5 p-4 bg-amber-50 border border-amber-200 rounded-lg space-y-3">
+          <p className="text-xs font-semibold text-amber-800">
+            Copy this snippet now — the embed token is shown only once.
+          </p>
+          <p className="text-xs text-amber-700">Bound to <span className="font-mono font-medium">{revealed.allowed_origin}</span></p>
+          <div className="relative">
+            <pre className="text-xs bg-slate-900 text-green-400 rounded p-3 overflow-x-auto whitespace-pre">{snippet}</pre>
+            <Button
+              size="sm" variant="outline"
+              className="absolute top-2 right-2 text-xs bg-slate-800 border-slate-600 text-slate-200 hover:bg-slate-700"
+              onClick={() => navigator.clipboard.writeText(snippet).then(() => { setCopied(true); setTimeout(() => setCopied(false), 2000) })}
+            >
+              {copied ? 'Copied!' : 'Copy'}
+            </Button>
+          </div>
+          <Button size="sm" variant="outline" onClick={() => setRevealed(null)}>Done</Button>
+        </div>
+      )}
+
+      {loading ? (
+        <p className="text-sm text-slate-400">Loading…</p>
+      ) : tokens.length === 0 ? (
+        <p className="text-sm text-slate-400">No embed tokens yet.</p>
+      ) : (
+        <div className="divide-y divide-slate-100">
+          {tokens.map(t => (
+            <div key={t.id} className="py-3 flex items-center justify-between gap-4">
+              <div className="min-w-0">
+                <p className="text-sm font-medium text-slate-900">{t.name}</p>
+                <p className="text-xs text-slate-500 truncate">{t.allowed_origin}</p>
+                <p className="text-xs text-slate-400 font-mono">{t.token_prefix}</p>
+              </div>
+              <div className="flex items-center gap-2 shrink-0">
+                {t.last_used_at && (
+                  <p className="text-xs text-slate-400 hidden sm:block">
+                    Last used {new Date(t.last_used_at).toLocaleDateString()}
+                  </p>
+                )}
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="text-red-600 border-red-200 hover:bg-red-50"
+                  onClick={() => handleRevoke(t.id)}
+                >
+                  Revoke
+                </Button>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
     </Card>
   )
 }
@@ -383,7 +468,7 @@ export default function AgentTrainingPage() {
             <ChatConsole agentId={agentId} />
           </div>
           <ApiKeyManager agentId={agentId} />
-          <EmbedWidgetSection agentId={agentId} />
+          <EmbedTokenManager agentId={agentId} />
 
           <Card className="p-6 mt-8 bg-slate-50">
             <h2 className="font-bold text-slate-900 mb-1">Integration</h2>

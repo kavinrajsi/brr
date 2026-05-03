@@ -1,12 +1,51 @@
 'use client'
 
-import { useParams, useSearchParams } from 'next/navigation'
+import { useParams } from 'next/navigation'
 import { useEffect, useRef, useState, Suspense } from 'react'
+
+// Read the embed token from the URL fragment (#token=...) — fragments are
+// not sent in HTTP requests, do not appear in server logs, and are not
+// forwarded in Referer headers from sub-resource fetches. We immediately
+// strip it from the URL bar with history.replaceState so it does not leak
+// via screen-share or browser history beyond the initial page load.
+function readAndStripToken() {
+  if (typeof window === 'undefined') return null
+  const hash = window.location.hash
+  if (!hash) return null
+  const params = new URLSearchParams(hash.slice(1))
+  const token = params.get('token')
+  if (!token) return null
+  // Replace the URL with a clean version (no fragment) without adding history
+  try {
+    const clean = window.location.pathname + window.location.search
+    window.history.replaceState(null, '', clean)
+  } catch {}
+  return token
+}
+
+// The parent page's origin (when embedded as iframe). For top-level loads
+// this is the empty string. The chat route requires this header for embed
+// tokens and matches it against the token's allowed_origin.
+function getParentOrigin() {
+  if (typeof window === 'undefined' || typeof document === 'undefined') return ''
+  // document.referrer is the parent's full URL when loaded as a cross-origin
+  // iframe. Same-origin iframes also expose it. Strip path/query down to origin.
+  const ref = document.referrer
+  if (!ref) return ''
+  try {
+    const u = new URL(ref)
+    const port = u.port && u.port !== '443' ? `:${u.port}` : ''
+    return `${u.protocol}//${u.hostname}${port}`
+  } catch {
+    return ''
+  }
+}
 
 function EmbedWidget() {
   const { agentId } = useParams()
-  const searchParams = useSearchParams()
-  const apiKey = searchParams.get('key')
+  const [token, setToken] = useState(null)
+  const [parentOrigin, setParentOrigin] = useState('')
+  const [ready, setReady] = useState(false)
 
   const [messages, setMessages]               = useState([])
   const [input, setInput]                     = useState('')
@@ -15,16 +54,26 @@ function EmbedWidget() {
   const bottomRef = useRef(null)
 
   useEffect(() => {
+    setToken(readAndStripToken())
+    setParentOrigin(getParentOrigin())
+    setReady(true)
+  }, [])
+
+  useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [messages, sending])
 
-  if (!apiKey) {
+  if (!ready) return null
+
+  if (!token) {
     return (
       <div className="flex items-center justify-center h-screen bg-white">
         <div className="text-center p-8 max-w-sm">
           <p className="font-semibold text-slate-900 mb-1">Configuration error</p>
           <p className="text-sm text-slate-500">
-            This widget is missing an API key. Add <code className="font-mono bg-slate-100 px-1 rounded">?key=YOUR_API_KEY</code> to the embed URL.
+            This widget is missing an embed token. Add{' '}
+            <code className="font-mono bg-slate-100 px-1 rounded">#token=YOUR_EMBED_TOKEN</code>{' '}
+            to the URL fragment.
           </p>
         </div>
       </div>
@@ -38,8 +87,6 @@ function EmbedWidget() {
     setInput('')
     setMessages(prev => [...prev, { role: 'user', text }])
     setSending(true)
-
-    // Add streaming placeholder
     setMessages(prev => [...prev, { role: 'agent', text: '', streaming: true }])
 
     try {
@@ -48,7 +95,12 @@ function EmbedWidget() {
 
       const res = await fetch(`/api/agents/${agentId}/chat`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+          // The chat route checks this against the token's allowed_origin
+          'X-Embed-Origin': parentOrigin,
+        },
         body: JSON.stringify(body),
       })
 

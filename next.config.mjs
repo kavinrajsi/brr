@@ -37,12 +37,20 @@ const nextConfig = {
           },
         ],
       },
-      // Allow embedding the chat widget in any iframe
+      // Embed widget — must be iframable from arbitrary origins, but the
+      // chat endpoint enforces per-token allowed_origin so a bad iframe
+      // host cannot make it talk. X-Frame-Options omitted intentionally
+      // (no value works for "any HTTPS origin"); browsers honour CSP.
       {
         source: '/embed/:path*',
         headers: [
-          { key: 'X-Frame-Options', value: 'ALLOWALL' },
-          { key: 'Content-Security-Policy', value: "frame-ancestors *" },
+          // Allow only HTTPS embedders. http: parents and javascript:/data:
+          // contexts are blocked. Per-agent origin restriction happens at
+          // the chat API layer via the token's allowed_origin column.
+          { key: 'Content-Security-Policy', value: "frame-ancestors https:" },
+          // Strict same-origin referrer policy so the parent's URL is sent
+          // for embed-origin verification but not propagated further.
+          { key: 'Referrer-Policy', value: 'strict-origin-when-cross-origin' },
         ],
       },
     ]

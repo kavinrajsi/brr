@@ -29,18 +29,50 @@ async function resolveAgentFromApiKey(supabase, rawKey, agentId) {
   return data || null
 }
 
+// Resolve and origin-verify an embed token. Returns the token row when the
+// embed-origin header matches the token's allowed_origin (exact match,
+// canonical scheme://host[:port]); null otherwise.
+async function resolveEmbedToken(supabase, rawToken, agentId, embedOrigin) {
+  if (!embedOrigin) return null
+  const tokenHash = createHash('sha256').update(rawToken).digest('hex')
+  const { data } = await supabase
+    .from('agent_embed_tokens')
+    .select('id, agent_id, allowed_origin')
+    .eq('token_hash', tokenHash)
+    .eq('agent_id', agentId)
+    .single()
+  if (!data) return null
+  // Origin gate — exact match. Canonicalise the incoming header by trimming.
+  if (data.allowed_origin !== embedOrigin.trim()) return null
+  supabase
+    .from('agent_embed_tokens')
+    .update({ last_used_at: new Date().toISOString() })
+    .eq('id', data.id)
+    .then(() => {})
+  return data
+}
+
 export async function POST(req, { params }) {
   const { agentId } = await params
   const supabase = getAdminClient()
 
   let authorized = false
   let isOwnerSession = false
+  let isEmbed = false
 
   const authHeader = req.headers.get('authorization') ?? ''
   if (authHeader.startsWith('Bearer brr_live_')) {
     const rawKey = authHeader.slice(7)
     const keyRecord = await resolveAgentFromApiKey(supabase, rawKey, agentId)
     authorized = Boolean(keyRecord)
+  } else if (authHeader.startsWith('Bearer embed_')) {
+    // Embed token from the iframe widget. Origin sent via X-Embed-Origin
+    // (the parent page's origin, read from document.referrer in the widget).
+    const rawToken = authHeader.slice(7)
+    const embedOrigin = req.headers.get('x-embed-origin')
+    const tokenRecord = await resolveEmbedToken(supabase, rawToken, agentId, embedOrigin)
+    authorized = Boolean(tokenRecord)
+    isEmbed = authorized
   } else {
     const user = await getUserFromRequest(req)
     if (user) {
@@ -57,10 +89,10 @@ export async function POST(req, { params }) {
 
   if (!authorized) return Response.json({ error: 'Unauthorized' }, { status: 401 })
 
-  // Rate-limit per (agent, auth-source). Both API-key and owner-session callers
-  // are capped — protects the Anthropic budget from a stolen key flooding chat.
-  const rateKey = isOwnerSession ? `chat:owner:${agentId}` : `chat:key:${agentId}`
-  const limited = checkRateLimit(rateKey, 60, 60_000) // 60 req/min per agent
+  // Rate-limit per (agent, auth-source). All three callers are capped —
+  // protects the Anthropic budget from a stolen key or compromised origin.
+  const rateBucket = isOwnerSession ? 'owner' : isEmbed ? 'embed' : 'key'
+  const limited = checkRateLimit(`chat:${rateBucket}:${agentId}`, 60, 60_000)
   if (limited) return limited
 
   if (!isAnthropicConfigured()) {
