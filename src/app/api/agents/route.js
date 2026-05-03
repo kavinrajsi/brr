@@ -11,11 +11,21 @@ export async function GET(req) {
   if (limited) return limited
 
   const supabase = getAdminClient()
-  const { data, error } = await supabase
+
+  // Optional ?brand_id=... server-side filter — avoids fetching every agent
+  // and filtering on the client. The brands!inner(user_id) join already
+  // scopes results to the caller; this is just an additional predicate.
+  const url = new URL(req.url)
+  const brandId = url.searchParams.get('brand_id')
+
+  let query = supabase
     .from('agents')
     .select('*, brands!inner(id, name, short_name, user_id)')
     .eq('brands.user_id', user.id)
-    .order('created_at', { ascending: false })
+  if (brandId) query = query.eq('brand_id', brandId)
+  query = query.order('created_at', { ascending: false })
+
+  const { data, error } = await query
 
   if (error) return dbError(error)
   return Response.json(data)

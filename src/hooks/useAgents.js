@@ -2,30 +2,40 @@
 
 import { useState, useEffect, useCallback } from 'react'
 import { useAuth } from '@/contexts/AuthContext'
-import { apiCall } from '@/lib/api-client'
+import { apiCall, isAbortError } from '@/lib/api-client'
 
+// Pass `brandId` to filter on the server. Previously this hook fetched ALL
+// agents the user owned and filtered client-side — wasteful and racy when
+// switching brands.
 export function useAgents(brandId = null) {
   const { user } = useAuth()
   const [agents, setAgents] = useState([])
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState(null)
 
-  const fetchAgents = useCallback(async () => {
+  const fetchAgents = useCallback(async (signal) => {
     setIsLoading(true)
     setError(null)
     try {
-      const data = await apiCall('/api/agents')
-      const filtered = brandId ? data.filter(a => a.brand_id === brandId) : data
-      setAgents(filtered ?? [])
+      const url = brandId
+        ? `/api/agents?brand_id=${encodeURIComponent(brandId)}`
+        : '/api/agents'
+      const data = await apiCall(url, { signal })
+      setAgents(Array.isArray(data) ? data : [])
     } catch (err) {
-      setError(err.message)
+      if (!isAbortError(err)) setError(err.message)
     } finally {
       setIsLoading(false)
     }
   }, [brandId])
 
+  // Abort the in-flight fetch on unmount or when dependencies change so a
+  // late response from a previous brandId can't overwrite fresh state.
   useEffect(() => {
-    if (user) fetchAgents()
+    if (!user) return
+    const controller = new AbortController()
+    fetchAgents(controller.signal)
+    return () => controller.abort()
   }, [user, fetchAgents])
 
   const createAgent = useCallback(async ({ brand_id, name }) => {

@@ -1,6 +1,6 @@
 'use client'
 
-import { createContext, useContext, useState, useEffect } from 'react'
+import { createContext, useContext, useState, useEffect, useMemo, useCallback } from 'react'
 import { supabase } from '@/lib/supabase'
 
 const AuthContext = createContext()
@@ -8,17 +8,23 @@ const AuthContext = createContext()
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(null)
   const [isLoading, setIsLoading] = useState(true)
+  // Separate state for in-flight credential operations (login/signup/reset/etc).
+  // Previously consumers used isLoading for both — that flips false after the
+  // initial session check, which let users double-click submit before the
+  // network call returned.
+  const [isSubmitting, setIsSubmitting] = useState(false)
   const [error, setError] = useState(null)
 
   useEffect(() => {
+    let cancelled = false
     const checkUser = async () => {
       try {
         const { data: { session } } = await supabase.auth.getSession()
-        setUser(session?.user || null)
+        if (!cancelled) setUser(session?.user || null)
       } catch (err) {
-        setError(err.message)
+        if (!cancelled) setError(err.message)
       } finally {
-        setIsLoading(false)
+        if (!cancelled) setIsLoading(false)
       }
     }
 
@@ -26,14 +32,25 @@ export function AuthProvider({ children }) {
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       (event, session) => {
-        setUser(session?.user || null)
+        if (!cancelled) setUser(session?.user || null)
       }
     )
 
-    return () => subscription?.unsubscribe()
+    return () => {
+      cancelled = true
+      subscription?.unsubscribe()
+    }
   }, [])
 
-  const signup = async (email, password) => {
+  // Wrap each credential op so we set isSubmitting around it. useCallback
+  // keeps identities stable so the context value doesn't churn.
+  const withSubmitting = useCallback((fn) => async (...args) => {
+    setIsSubmitting(true)
+    try { return await fn(...args) }
+    finally { setIsSubmitting(false) }
+  }, [])
+
+  const signup = useCallback(withSubmitting(async (email, password) => {
     setError(null)
     try {
       const { data, error } = await supabase.auth.signUp({
@@ -47,9 +64,9 @@ export function AuthProvider({ children }) {
       setError(err.message)
       throw err
     }
-  }
+  }), [withSubmitting])
 
-  const login = async (email, password) => {
+  const login = useCallback(withSubmitting(async (email, password) => {
     setError(null)
     try {
       const { data, error } = await supabase.auth.signInWithPassword({ email, password })
@@ -59,9 +76,9 @@ export function AuthProvider({ children }) {
       setError(err.message)
       throw err
     }
-  }
+  }), [withSubmitting])
 
-  const forgotPassword = async (email) => {
+  const forgotPassword = useCallback(withSubmitting(async (email) => {
     setError(null)
     try {
       const { error } = await supabase.auth.resetPasswordForEmail(email, {
@@ -72,9 +89,9 @@ export function AuthProvider({ children }) {
       setError(err.message)
       throw err
     }
-  }
+  }), [withSubmitting])
 
-  const updatePassword = async (newPassword) => {
+  const updatePassword = useCallback(withSubmitting(async (newPassword) => {
     setError(null)
     try {
       const { error } = await supabase.auth.updateUser({ password: newPassword })
@@ -83,9 +100,9 @@ export function AuthProvider({ children }) {
       setError(err.message)
       throw err
     }
-  }
+  }), [withSubmitting])
 
-  const logout = async () => {
+  const logout = useCallback(withSubmitting(async () => {
     setError(null)
     try {
       const { error } = await supabase.auth.signOut()
@@ -95,13 +112,16 @@ export function AuthProvider({ children }) {
       setError(err.message)
       throw err
     }
-  }
+  }), [withSubmitting])
 
-  return (
-    <AuthContext.Provider value={{ user, isLoading, error, signup, login, logout, forgotPassword, updatePassword }}>
-      {children}
-    </AuthContext.Provider>
+  // Memoise the context value so consumers don't re-render every time a
+  // parent re-renders. Was creating a fresh object literal each render.
+  const value = useMemo(
+    () => ({ user, isLoading, isSubmitting, error, signup, login, logout, forgotPassword, updatePassword }),
+    [user, isLoading, isSubmitting, error, signup, login, logout, forgotPassword, updatePassword]
   )
+
+  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>
 }
 
 export function useAuth() {

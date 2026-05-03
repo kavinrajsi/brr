@@ -14,8 +14,13 @@ export function ChatConsole({ agentId, title = 'Test Console', subtitle = 'Chat 
   const [conversationId, setConversationId] = useState(null)
   const bottomRef                           = useRef(null)
 
+  // Throttle to one frame so streaming tokens don't queue dozens of
+  // smooth-scroll animations per second.
   useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
+    const id = requestAnimationFrame(() => {
+      bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
+    })
+    return () => cancelAnimationFrame(id)
   }, [messages])
 
   useEffect(() => {

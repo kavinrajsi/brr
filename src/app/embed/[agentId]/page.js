@@ -59,8 +59,14 @@ function EmbedWidget() {
     setReady(true)
   }, [])
 
+  // Throttle the auto-scroll to one frame. Without this, every streaming
+  // token (often dozens per second) would queue a smooth-scroll animation,
+  // pegging the main thread and causing visible jank during long replies.
   useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
+    const id = requestAnimationFrame(() => {
+      bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
+    })
+    return () => cancelAnimationFrame(id)
   }, [messages, sending])
 
   if (!ready) return null

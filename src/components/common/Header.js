@@ -12,16 +12,24 @@ import {
   DropdownMenuSeparator,
 } from '@/components/ui/dropdown-menu'
 
-const navItems = [
+// Admin link is gated by NEXT_PUBLIC_ADMIN_USER_IDS (mirror of the server-side
+// ADMIN_USER_IDS env). Non-admins shouldn't see it — the API enforces the
+// real check; this is just UX so users don't click into a 403.
+const ADMIN_IDS = (process.env.NEXT_PUBLIC_ADMIN_USER_IDS ?? '')
+  .split(',')
+  .map(s => s.trim())
+  .filter(Boolean)
+
+const baseNavItems = [
   { href: '/dashboard',               label: 'Dashboard'     },
   { href: '/dashboard/brands',        label: 'Brands'        },
   { href: '/dashboard/agents',        label: 'Agents'        },
   { href: '/dashboard/organizations', label: 'Organizations' },
   { href: '/dashboard/billing',       label: 'Billing'       },
-  { href: '/dashboard/admin',         label: 'Admin'         },
   { href: '/dashboard/settings',      label: 'Settings'      },
   { href: '/dashboard/guide',         label: 'Guide'         },
 ]
+const adminNavItem = { href: '/dashboard/admin', label: 'Admin' }
 
 function isActiveLink(pathname, href) {
   return pathname === href || (href !== '/dashboard' && pathname.startsWith(href))
@@ -32,6 +40,9 @@ export function DashboardHeader() {
   const router = useRouter()
   const pathname = usePathname()
   const [mobileOpen, setMobileOpen] = useState(false)
+
+  const isAdmin = user?.id && ADMIN_IDS.includes(user.id)
+  const navItems = isAdmin ? [...baseNavItems.slice(0, 5), adminNavItem, ...baseNavItems.slice(5)] : baseNavItems
 
   const handleLogout = async () => {
     await logout()

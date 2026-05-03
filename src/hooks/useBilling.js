@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react'
 import { useAuth } from '@/contexts/AuthContext'
-import { apiCall } from '@/lib/api-client'
+import { apiCall, isAbortError } from '@/lib/api-client'
 
 export function useBilling() {
   const { user } = useAuth()
@@ -13,24 +13,27 @@ export function useBilling() {
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState(null)
 
-  const fetchPlans = useCallback(async () => {
+  const fetchPlans = useCallback(async (signal) => {
     setIsLoading(true)
     setError(null)
     try {
-      const res = await apiCall('/api/billing/plans')
+      const res = await apiCall('/api/billing/plans', { signal })
       setPlans(res.plans)
       setCurrentPlan(res.currentPlan)
       setSubscription(res.subscription)
       setStripeConfigured(res.stripeConfigured)
     } catch (err) {
-      setError(err.message)
+      if (!isAbortError(err)) setError(err.message)
     } finally {
       setIsLoading(false)
     }
   }, [])
 
   useEffect(() => {
-    if (user) fetchPlans()
+    if (!user) return
+    const controller = new AbortController()
+    fetchPlans(controller.signal)
+    return () => controller.abort()
   }, [user, fetchPlans])
 
   const startCheckout = useCallback(async (planId) => {

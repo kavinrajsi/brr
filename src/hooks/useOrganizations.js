@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react'
 import { useAuth } from '@/contexts/AuthContext'
-import { apiCall } from '@/lib/api-client'
+import { apiCall, isAbortError } from '@/lib/api-client'
 
 export function useOrganizations() {
   const { user } = useAuth()
@@ -10,21 +10,24 @@ export function useOrganizations() {
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState(null)
 
-  const fetchOrganizations = useCallback(async () => {
+  const fetchOrganizations = useCallback(async (signal) => {
     setIsLoading(true)
     setError(null)
     try {
-      const res = await apiCall('/api/organizations')
+      const res = await apiCall('/api/organizations', { signal })
       setOrganizations(res?.organizations ?? [])
     } catch (err) {
-      setError(err.message)
+      if (!isAbortError(err)) setError(err.message)
     } finally {
       setIsLoading(false)
     }
   }, [])
 
   useEffect(() => {
-    if (user) fetchOrganizations()
+    if (!user) return
+    const controller = new AbortController()
+    fetchOrganizations(controller.signal)
+    return () => controller.abort()
   }, [user, fetchOrganizations])
 
   const createOrganization = useCallback(async ({ name, slug, description }) => {

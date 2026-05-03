@@ -7,6 +7,9 @@ async function getAuthToken() {
   return session?.access_token
 }
 
+// `signal` is an AbortSignal — pass one from a hook so that unmounting the
+// component cancels the in-flight request. fetch() rejects with AbortError
+// when the signal is aborted; callers can detect it via err.name === 'AbortError'.
 export async function apiCall(endpoint, options = {}) {
   const token = await getAuthToken()
 
@@ -28,6 +31,12 @@ export async function apiCall(endpoint, options = {}) {
 
   if (response.status === 204) return null
   return response.json()
+}
+
+// True when an error came from an aborted fetch (component unmount, route
+// change). Hook fetch effects use this to skip setState after teardown.
+export function isAbortError(err) {
+  return err?.name === 'AbortError'
 }
 
 export async function streamChat(agentId, message, onChunk, onDone, onError, conversationId) {

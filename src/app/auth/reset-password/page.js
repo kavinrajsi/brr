@@ -22,7 +22,11 @@ export default function ResetPasswordPage() {
   const [isChecking, setIsChecking] = useState(true)
 
   useEffect(() => {
-    // Supabase exchanges the token in the URL hash and emits PASSWORD_RECOVERY
+    // Supabase exchanges the token in the URL hash and emits PASSWORD_RECOVERY.
+    // If the token is expired/used/missing, no event ever fires — without a
+    // timeout, the "Verifying reset link…" screen would hang forever.
+    const RECOVERY_TIMEOUT_MS = 5_000
+
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event) => {
       if (event === 'PASSWORD_RECOVERY') {
         setIsValidSession(true)
@@ -30,7 +34,15 @@ export default function ResetPasswordPage() {
       setIsChecking(false)
     })
 
-    return () => subscription.unsubscribe()
+    const timer = setTimeout(() => {
+      // If we still haven't heard back, treat it as an invalid token
+      setIsChecking(false)
+    }, RECOVERY_TIMEOUT_MS)
+
+    return () => {
+      subscription.unsubscribe()
+      clearTimeout(timer)
+    }
   }, [])
 
   const handleSubmit = async (e) => {

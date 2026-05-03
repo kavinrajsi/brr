@@ -169,8 +169,11 @@ function EmbedTokenManager({ agentId }) {
   const [revealed, setRevealed]     = useState(null)
   const [error, setError]           = useState('')
   const [copied, setCopied]         = useState(false)
-
-  const appOrigin = typeof window !== 'undefined' ? window.location.origin : 'https://your-domain.com'
+  // Read window.location.origin in an effect — referencing window during the
+  // initial render produces a hydration mismatch (server renders the
+  // placeholder, client renders the real origin).
+  const [appOrigin, setAppOrigin] = useState('https://your-domain.com')
+  useEffect(() => { setAppOrigin(window.location.origin) }, [])
 
   useEffect(() => {
     apiCall(`/api/agents/${agentId}/embed-tokens`)
@@ -342,11 +345,18 @@ export default function AgentTrainingPage() {
     }
   }
 
+  // Same hydration-safe pattern as the embed token manager — window.location
+  // is undefined on the server and would mismatch on the client.
+  const [appOrigin, setAppOrigin] = useState('')
+  useEffect(() => { setAppOrigin(window.location.origin) }, [])
+
   useEffect(() => {
+    let cancelled = false
     apiCall(`/api/agents/${agentId}`)
-      .then(setAgent)
+      .then(a => { if (!cancelled) setAgent(a) })
       .catch(() => {})
-      .finally(() => setAgentLoading(false))
+      .finally(() => { if (!cancelled) setAgentLoading(false) })
+    return () => { cancelled = true }
   }, [agentId])
 
   const isLoading = agentLoading || trainingLoading
@@ -475,7 +485,7 @@ export default function AgentTrainingPage() {
             <p className="text-sm text-slate-600 mb-4">Call your agent from any tool using a generated API key.</p>
 
             <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">REST API</p>
-            <pre className="text-xs bg-slate-900 text-green-400 rounded-lg p-4 overflow-x-auto mb-5">{`curl -X POST ${typeof window !== 'undefined' ? window.location.origin : ''}/api/agents/${agentId}/chat \\
+            <pre className="text-xs bg-slate-900 text-green-400 rounded-lg p-4 overflow-x-auto mb-5">{`curl -X POST ${appOrigin}/api/agents/${agentId}/chat \\
   -H "Authorization: Bearer <your-api-key>" \\
   -H "Content-Type: application/json" \\
   -d '{"message": "Hello, I need help with my order"}'`}</pre>
@@ -486,12 +496,12 @@ export default function AgentTrainingPage() {
             </p>
             <div className="flex items-center gap-2">
               <code className="flex-1 text-xs bg-white border border-slate-200 rounded-lg px-3 py-2 font-mono break-all">
-                {typeof window !== 'undefined' ? window.location.origin : ''}/api/mcp
+                {appOrigin}/api/mcp
               </code>
               <Button
                 size="sm"
                 variant="outline"
-                onClick={() => navigator.clipboard.writeText(`${window.location.origin}/api/mcp`)}
+                onClick={() => navigator.clipboard.writeText(`${appOrigin}/api/mcp`)}
               >
                 Copy
               </Button>

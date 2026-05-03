@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
-import { apiCall } from '@/lib/api-client'
+import { apiCall, isAbortError } from '@/lib/api-client'
 
 export function useBrandConfig(brandId) {
   const [config, setConfig] = useState(null)
@@ -9,22 +9,24 @@ export function useBrandConfig(brandId) {
   const [error, setError] = useState(null)
   const [isSaving, setIsSaving] = useState(false)
 
-  const fetchConfig = useCallback(async () => {
+  const fetchConfig = useCallback(async (signal) => {
     if (!brandId) return
     setIsLoading(true)
     setError(null)
     try {
-      const data = await apiCall(`/api/brands/${brandId}/config`)
+      const data = await apiCall(`/api/brands/${brandId}/config`, { signal })
       setConfig(data.config ?? {})
     } catch (err) {
-      setError(err.message)
+      if (!isAbortError(err)) setError(err.message)
     } finally {
       setIsLoading(false)
     }
   }, [brandId])
 
   useEffect(() => {
-    fetchConfig()
+    const controller = new AbortController()
+    fetchConfig(controller.signal)
+    return () => controller.abort()
   }, [fetchConfig])
 
   const saveConfig = useCallback(async (configData) => {

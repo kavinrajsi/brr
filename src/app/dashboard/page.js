@@ -21,12 +21,20 @@ export default function DashboardPage() {
   const { user } = useAuth()
   const [stats, setStats] = useState(null)
   const [isLoading, setIsLoading] = useState(true)
+  const [statsError, setStatsError] = useState(null)
 
   useEffect(() => {
+    let cancelled = false
     apiCall('/api/dashboard/stats')
-      .then(data => setStats(data.stats))
-      .catch(() => {})
-      .finally(() => setIsLoading(false))
+      .then(data => { if (!cancelled) setStats(data.stats) })
+      .catch(err => {
+        // Surface the failure rather than silently rendering zeros across
+        // every stat card. Logged for diagnostics; user sees a banner.
+        console.error('[dashboard/stats]', err?.message)
+        if (!cancelled) setStatsError(err?.message || 'Failed to load stats')
+      })
+      .finally(() => { if (!cancelled) setIsLoading(false) })
+    return () => { cancelled = true }
   }, [])
 
   const successRate = stats && stats.totalAgents > 0
@@ -46,6 +54,12 @@ export default function DashboardPage() {
         <h1 className="text-3xl font-bold text-slate-900">Dashboard</h1>
         <p className="text-slate-600 mt-2">Welcome to BRR AI Training System</p>
       </div>
+
+      {statsError && (
+        <div className="mb-6 p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700">
+          Failed to load dashboard stats: {statsError}
+        </div>
+      )}
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
         {statCards.map(card => (

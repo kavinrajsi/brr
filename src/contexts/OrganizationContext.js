@@ -1,6 +1,6 @@
 'use client'
 
-import { createContext, useContext, useState, useEffect } from 'react'
+import { createContext, useContext, useState, useEffect, useMemo, useCallback } from 'react'
 import { useOrganizations } from '@/hooks/useOrganizations'
 
 const OrganizationContext = createContext()
@@ -20,16 +20,19 @@ export function OrganizationProvider({ children }) {
     setActiveOrg(match)
   }, [organizations, isLoading])
 
-  const switchOrg = (org) => {
+  const switchOrg = useCallback((org) => {
     setActiveOrg(org)
     if (typeof window !== 'undefined') localStorage.setItem(STORAGE_KEY, org.id)
-  }
+  }, [])
 
-  return (
-    <OrganizationContext.Provider value={{ organizations, activeOrg, isLoading, error, switchOrg, refetch: fetchOrganizations }}>
-      {children}
-    </OrganizationContext.Provider>
+  // Memoise the context value so consumers don't re-render every parent
+  // render. Was creating a fresh object literal each render.
+  const value = useMemo(
+    () => ({ organizations, activeOrg, isLoading, error, switchOrg, refetch: fetchOrganizations }),
+    [organizations, activeOrg, isLoading, error, switchOrg, fetchOrganizations]
   )
+
+  return <OrganizationContext.Provider value={value}>{children}</OrganizationContext.Provider>
 }
 
 export function useOrganization() {

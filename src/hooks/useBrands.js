@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
-import { apiCall } from '@/lib/api-client'
+import { apiCall, isAbortError } from '@/lib/api-client'
 import { useAuth } from '@/contexts/AuthContext'
 
 export function useBrands() {
@@ -10,37 +10,36 @@ export function useBrands() {
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState(null)
 
-  const fetchBrands = useCallback(async () => {
+  const fetchBrands = useCallback(async (signal) => {
     setIsLoading(true)
     setError(null)
     try {
-      const res = await apiCall('/api/brands')
+      const res = await apiCall('/api/brands', { signal })
       // API returns { data, pagination } after Phase 3 — extract the array
       setBrands(res?.data ?? res ?? [])
     } catch (err) {
-      setError(err.message)
+      if (!isAbortError(err)) setError(err.message)
     } finally {
       setIsLoading(false)
     }
   }, [])
 
   useEffect(() => {
-    if (user) fetchBrands()
+    if (!user) return
+    const controller = new AbortController()
+    fetchBrands(controller.signal)
+    return () => controller.abort()
   }, [user, fetchBrands])
 
-  // TODO: implement createBrand
-  // Option A (optimistic): prepend newBrand to local state, no re-fetch
-  // Option B (accurate):   call fetchBrands() after the API call
   const createBrand = useCallback(async (brandData) => {
     const newBrand = await apiCall('/api/brands', {
       method: 'POST',
       body: JSON.stringify(brandData),
     })
-    setBrands(prev => [newBrand, ...prev])   // ← swap for fetchBrands() for Option B
+    setBrands(prev => [newBrand, ...prev])
     return newBrand
   }, [])
 
-  // TODO: implement deleteBrand
   const deleteBrand = useCallback(async (brandId) => {
     await apiCall(`/api/brands/${brandId}`, { method: 'DELETE' })
     setBrands(prev => prev.filter(b => b.id !== brandId))

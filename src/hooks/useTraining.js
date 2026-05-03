@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
-import { apiCall } from '@/lib/api-client'
+import { apiCall, isAbortError } from '@/lib/api-client'
 
 export function useTraining(agentId) {
   const [stages, setStages] = useState([])
@@ -9,35 +9,38 @@ export function useTraining(agentId) {
   const [error, setError] = useState(null)
   const [isSaving, setIsSaving] = useState(false)
 
-  const fetchTraining = useCallback(async () => {
+  const fetchTraining = useCallback(async (signal) => {
     if (!agentId) return
     setIsLoading(true)
     setError(null)
     try {
-      const data = await apiCall(`/api/agents/${agentId}/training`)
+      const data = await apiCall(`/api/agents/${agentId}/training`, { signal })
       setStages(data ?? [])
     } catch (err) {
-      setError(err.message)
+      if (!isAbortError(err)) setError(err.message)
     } finally {
       setIsLoading(false)
     }
   }, [agentId])
 
   useEffect(() => {
-    fetchTraining()
+    const controller = new AbortController()
+    fetchTraining(controller.signal)
+    return () => controller.abort()
   }, [fetchTraining])
 
   const saveStage = useCallback(async (stageNum, updates) => {
     setIsSaving(true)
     try {
-      const data = await apiCall(`/api/agents/${agentId}/training/${stageNum}`, {
+      await apiCall(`/api/agents/${agentId}/training/${stageNum}`, {
         method: 'PUT',
         body: JSON.stringify(updates),
       })
-      setStages(prev => prev.map(s => s.stage === stageNum ? data : s))
-      // Re-fetch to pick up any cascade changes (agent current_stage, next stage unlocked)
+      // Refetch only — cascades (agent.current_stage, next stage unlocked,
+      // certified_at) require fresh DB state. Previously this also did an
+      // optimistic local-state patch; that's redundant now and led to a
+      // brief flash of half-updated UI.
       await fetchTraining()
-      return data
     } finally {
       setIsSaving(false)
     }
