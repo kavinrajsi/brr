@@ -236,7 +236,33 @@ export default function BrandConfigPage() {
         </Alert>
       )}
 
-      <Card className="p-8 mb-6">
+      <div className="grid grid-cols-1 lg:grid-cols-[220px_1fr] gap-6">
+        {/* Left: facet navigator (sticky on desktop) */}
+        <aside className="lg:sticky lg:top-20 lg:self-start">
+          <Card className="p-4 bg-slate-50">
+            <h3 className="font-semibold text-slate-900 mb-3 text-sm">Brand Prism</h3>
+            <div className="space-y-1">
+              {STEPS.map(s => (
+                <button
+                  key={s.id}
+                  onClick={() => setCurrentStep(s.id)}
+                  className={[
+                    'w-full text-left px-3 py-2 rounded text-sm transition-colors flex items-center gap-2',
+                    currentStep === s.id
+                      ? 'bg-blue-100 text-blue-900 font-medium'
+                      : 'text-slate-700 hover:bg-slate-100',
+                  ].join(' ')}
+                >
+                  <span className="text-base leading-none">{s.icon}</span>
+                  <span>{s.facet}</span>
+                </button>
+              ))}
+            </div>
+          </Card>
+        </aside>
+
+        {/* Right: form */}
+        <Card className="p-8">
         {/* Facet header */}
         <div className="flex items-start gap-4 mb-8 pb-6 border-b border-slate-100">
           <span className="text-3xl leading-none mt-0.5">{step.icon}</span>
@@ -556,29 +582,8 @@ export default function BrandConfigPage() {
             Next →
           </Button>
         </div>
-      </Card>
-
-      {/* Step navigator */}
-      <Card className="p-5 bg-slate-50">
-        <h3 className="font-semibold text-slate-900 mb-3 text-sm">Brand Prism</h3>
-        <div className="space-y-1">
-          {STEPS.map(s => (
-            <button
-              key={s.id}
-              onClick={() => setCurrentStep(s.id)}
-              className={[
-                'w-full text-left px-3 py-2 rounded text-sm transition-colors flex items-center gap-2',
-                currentStep === s.id
-                  ? 'bg-blue-100 text-blue-900 font-medium'
-                  : 'text-slate-700 hover:bg-slate-100',
-              ].join(' ')}
-            >
-              <span className="text-base leading-none">{s.icon}</span>
-              <span>{s.facet}</span>
-            </button>
-          ))}
-        </div>
-      </Card>
+        </Card>
+      </div>
     </div>
   )
 }
