@@ -1,32 +1,11 @@
 'use client'
 
 import { useEffect, useRef, useState } from 'react'
-import ReactMarkdown from 'react-markdown'
-import remarkGfm from 'remark-gfm'
 import { streamChat } from '@/lib/api-client'
 import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-
-const MARKDOWN_COMPONENTS = {
-  p: ({ children }) => <p className="mb-2 last:mb-0">{children}</p>,
-  strong: ({ children }) => <strong className="font-semibold">{children}</strong>,
-  em: ({ children }) => <em className="italic">{children}</em>,
-  code: ({ inline, children }) =>
-    inline
-      ? <code className="bg-slate-100 text-slate-800 px-1 py-0.5 rounded text-[0.85em] font-mono">{children}</code>
-      : <code className="block bg-slate-900 text-green-300 p-2 rounded text-[0.85em] font-mono overflow-x-auto whitespace-pre">{children}</code>,
-  pre: ({ children }) => <pre className="my-2">{children}</pre>,
-  ul: ({ children }) => <ul className="list-disc list-inside space-y-0.5 my-1">{children}</ul>,
-  ol: ({ children }) => <ol className="list-decimal list-inside space-y-0.5 my-1">{children}</ol>,
-  li: ({ children }) => <li className="leading-snug">{children}</li>,
-  h1: ({ children }) => <h1 className="text-base font-bold mt-2 mb-1">{children}</h1>,
-  h2: ({ children }) => <h2 className="text-sm font-bold mt-2 mb-1">{children}</h2>,
-  h3: ({ children }) => <h3 className="text-sm font-semibold mt-2 mb-1">{children}</h3>,
-  a: ({ href, children }) => <a href={href} target="_blank" rel="noopener noreferrer" className="text-blue-600 underline">{children}</a>,
-  blockquote: ({ children }) => <blockquote className="border-l-2 border-slate-300 pl-2 italic text-slate-600 my-1">{children}</blockquote>,
-  hr: () => <hr className="my-2 border-slate-200" />,
-}
+import { MarkdownView } from '@/components/ui/markdown-view'
 
 export function ChatConsole({ agentId, title = 'Test Console', subtitle = 'Chat with your agent to verify its brand voice before going live.', heightClass = 'h-72', initialPrompt = '' }) {
   const [messages, setMessages]             = useState([])
@@ -112,7 +91,7 @@ export function ChatConsole({ agentId, title = 'Test Console', subtitle = 'Chat 
               'bg-red-50 border border-red-200 text-red-700 whitespace-pre-wrap'
             }`}>
               {m.role === 'agent'
-                ? <ReactMarkdown remarkPlugins={[remarkGfm]} components={MARKDOWN_COMPONENTS}>{m.text}</ReactMarkdown>
+                ? <MarkdownView>{m.text}</MarkdownView>
                 : m.text
               }
               {m.streaming && <span className="inline-block animate-pulse ml-0.5 text-slate-400">▌</span>}

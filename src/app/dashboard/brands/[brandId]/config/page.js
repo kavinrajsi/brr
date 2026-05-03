@@ -5,7 +5,7 @@ import { useParams } from 'next/navigation'
 import { useBrandConfig } from '@/hooks/useBrandConfig'
 import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
-import { Textarea } from '@/components/ui/textarea'
+import { MarkdownTextarea } from '@/components/ui/markdown-textarea'
 import { Label } from '@/components/ui/label'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import Link from 'next/link'
@@ -282,7 +282,7 @@ export default function BrandConfigPage() {
               label="Visual Identity"
               hint="Describe the brand's look — colours, shapes, design language, signature product."
             >
-              <Textarea
+              <MarkdownTextarea
                 rows={3}
                 placeholder="e.g. Bold red and white palette, minimalist product design, iconic swoosh mark…"
                 value={formData.physique ?? ''}
@@ -294,7 +294,7 @@ export default function BrandConfigPage() {
               label="Tagline / Slogan"
               hint="The line that best captures the brand in a single phrase."
             >
-              <Textarea
+              <MarkdownTextarea
                 rows={2}
                 placeholder="e.g. Just Do It"
                 value={formData.tagline ?? ''}
@@ -306,7 +306,7 @@ export default function BrandConfigPage() {
               label="Signature Products or Services"
               hint="The offerings most associated with the brand."
             >
-              <Textarea
+              <MarkdownTextarea
                 rows={2}
                 placeholder="e.g. Running shoes, athletic apparel, sports accessories"
                 value={formData.signature_products ?? ''}
@@ -324,7 +324,7 @@ export default function BrandConfigPage() {
               label="Character Traits"
               hint="Comma-separated traits — as if the brand were a person."
             >
-              <Textarea
+              <MarkdownTextarea
                 rows={2}
                 placeholder="e.g. bold, inspiring, competitive, authentic"
                 value={formData.personality_traits ?? ''}
@@ -336,7 +336,7 @@ export default function BrandConfigPage() {
               label="Tone of Voice"
               hint="How the brand speaks — choose a few adjectives."
             >
-              <Textarea
+              <MarkdownTextarea
                 rows={2}
                 placeholder="e.g. energetic, direct, motivational"
                 value={formData.tone ?? ''}
@@ -348,7 +348,7 @@ export default function BrandConfigPage() {
               label="Response Style"
               hint="How the AI should structure its replies."
             >
-              <Textarea
+              <MarkdownTextarea
                 rows={2}
                 placeholder="e.g. short and punchy, never verbose, use action verbs"
                 value={formData.response_style ?? ''}
@@ -360,7 +360,7 @@ export default function BrandConfigPage() {
               label="Brand Promise / Soul"
               hint="One sentence capturing the brand's core commitment."
             >
-              <Textarea
+              <MarkdownTextarea
                 rows={2}
                 placeholder="e.g. To bring inspiration and innovation to every athlete in the world."
                 value={formData.promise ?? ''}
@@ -378,7 +378,7 @@ export default function BrandConfigPage() {
               label="Core Values"
               hint="Comma-separated values that the brand will never compromise."
             >
-              <Textarea
+              <MarkdownTextarea
                 rows={2}
                 placeholder="e.g. excellence, innovation, sustainability, community"
                 value={formData.key_values ?? ''}
@@ -390,7 +390,7 @@ export default function BrandConfigPage() {
               label="Beliefs & Principles"
               hint="What the brand stands for beyond its products."
             >
-              <Textarea
+              <MarkdownTextarea
                 rows={3}
                 placeholder="e.g. We believe sport is a universal language. Every athlete — regardless of ability — deserves the tools to reach their potential."
                 value={formData.culture_beliefs ?? ''}
@@ -402,7 +402,7 @@ export default function BrandConfigPage() {
               label="Origin & Mission"
               hint="Where the brand came from and why it exists."
             >
-              <Textarea
+              <MarkdownTextarea
                 rows={3}
                 placeholder="e.g. Founded in 1964 with a handshake and a shared love of running…"
                 value={formData.culture_origin ?? ''}
@@ -420,7 +420,7 @@ export default function BrandConfigPage() {
               label="Relationship Type"
               hint="How would you describe the bond between brand and customer?"
             >
-              <Textarea
+              <MarkdownTextarea
                 rows={2}
                 placeholder="e.g. coach, mentor, training partner, challenger"
                 value={formData.relationship_type ?? ''}
@@ -432,7 +432,7 @@ export default function BrandConfigPage() {
               label="Escalation Triggers"
               hint="Topics where the AI should hand off to a human specialist. Comma-separated."
             >
-              <Textarea
+              <MarkdownTextarea
                 rows={2}
                 placeholder="e.g. refund disputes, injury complaints, legal questions"
                 value={formData.escalation_triggers ?? ''}
@@ -444,7 +444,7 @@ export default function BrandConfigPage() {
               label="Prohibited Topics"
               hint="Topics the AI must never engage with. Comma-separated."
             >
-              <Textarea
+              <MarkdownTextarea
                 rows={2}
                 placeholder="e.g. competitor comparisons, political opinions, pricing negotiation"
                 value={formData.prohibited_topics ?? ''}
@@ -456,12 +456,12 @@ export default function BrandConfigPage() {
               label="Webhook URL"
               hint="HTTPS endpoint to call when escalation is triggered."
             >
-              <Textarea
-                rows={1}
+              <input
+                type="url"
                 placeholder="e.g. https://your-system.example.com/handoff"
                 value={formData.webhook_url ?? ''}
                 onChange={e => set('webhook_url', e.target.value)}
-                className="mt-1"
+                className="mt-1 w-full rounded-md border border-input bg-background px-3 py-2 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
               />
             </Field>
             <Field
@@ -486,7 +486,7 @@ export default function BrandConfigPage() {
               label="Target Audience"
               hint="Who the brand is primarily speaking to."
             >
-              <Textarea
+              <MarkdownTextarea
                 rows={2}
                 placeholder="e.g. athletes of all levels aged 16–40, performance-driven individuals"
                 value={formData.target_audience ?? ''}
@@ -498,7 +498,7 @@ export default function BrandConfigPage() {
               label="Customer Archetype"
               hint="The idealised image of the person who uses this brand."
             >
-              <Textarea
+              <MarkdownTextarea
                 rows={2}
                 placeholder="e.g. the relentless competitor who refuses to settle"
                 value={formData.reflection_archetype ?? ''}
@@ -510,7 +510,7 @@ export default function BrandConfigPage() {
               label="Customer Values & Aspirations"
               hint="What this audience cares about and wants to achieve."
             >
-              <Textarea
+              <MarkdownTextarea
                 rows={3}
                 placeholder="e.g. They value performance, authenticity, and self-improvement. They aspire to personal bests — not just trophies."
                 value={formData.customer_values ?? ''}
@@ -528,7 +528,7 @@ export default function BrandConfigPage() {
               label="How Customers Feel"
               hint="Complete the sentence: 'When I use this brand, I feel…'"
             >
-              <Textarea
+              <MarkdownTextarea
                 rows={3}
                 placeholder="e.g. …capable, unstoppable, part of something bigger than myself."
                 value={formData.selfimage_feeling ?? ''}
@@ -540,7 +540,7 @@ export default function BrandConfigPage() {
               label="Aspiration Fulfilled"
               hint="What version of themselves does the brand help customers become?"
             >
-              <Textarea
+              <MarkdownTextarea
                 rows={2}
                 placeholder="e.g. the best version of an athlete"
                 value={formData.selfimage_aspiration ?? ''}
@@ -552,7 +552,7 @@ export default function BrandConfigPage() {
               label="AI Response Guidelines"
               hint="Final rules the agent must always follow when responding."
             >
-              <Textarea
+              <MarkdownTextarea
                 rows={3}
                 placeholder="e.g. Never apologise for the brand's premium pricing. Always end with an encouraging call to action."
                 value={formData.response_guidelines ?? ''}
