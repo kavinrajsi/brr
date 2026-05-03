@@ -179,7 +179,7 @@ export default function BrandConfigPage() {
         <div className="flex items-start justify-between">
           <div>
             <h1 className="text-3xl font-bold text-slate-900">Brand Prism</h1>
-            <p className="text-slate-600 mt-1">Define your brand identity across Kapferer's six facets</p>
+            <p className="text-slate-600 mt-1">Define your brand identity across Kapferer&apos;s six facets</p>
           </div>
           <div className="flex gap-2">
             <input

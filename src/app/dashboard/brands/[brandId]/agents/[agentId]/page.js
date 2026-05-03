@@ -294,84 +294,8 @@ function ChatConsole({ agentId }) {
   )
 }
 
-// ─── AI Evaluation ────────────────────────────────────────────────────────────
-
-function ScoreBadge({ score }) {
-  if (score == null) return null
-  const color = score >= 7 ? 'bg-green-100 text-green-800 border-green-200'
-    : score >= 4 ? 'bg-yellow-100 text-yellow-800 border-yellow-200'
-    : 'bg-red-100 text-red-800 border-red-200'
-  return <span className={`text-sm font-bold px-2.5 py-0.5 rounded-full border ${color}`}>{score}/10</span>
-}
-
-function StageRow({ stage, href, agentId }) {
-  const [loading, setLoading] = useState(false)
-  const [result, setResult]   = useState(null)
-  const [error, setError]     = useState('')
-  const [open, setOpen]       = useState(true)
-
-  const run = async () => {
-    setLoading(true); setError(''); setResult(null); setOpen(true)
-    try {
-      setResult(await apiCall(`/api/agents/${agentId}/training/${stage.stage}/evaluate`, { method: 'POST' }))
-    } catch (err) {
-      setError(err.message)
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  const evaluateButton = stage.status === 'In Progress' ? (
-    result && !open ? (
-      <Button
-        size="sm"
-        variant="outline"
-        className="shrink-0 text-xs text-slate-600 border-slate-200"
-        onClick={() => setOpen(true)}
-      >
-        Show result
-      </Button>
-    ) : (
-      <Button
-        size="sm"
-        variant="outline"
-        className="shrink-0 text-xs text-blue-700 border-blue-200 hover:bg-blue-50"
-        onClick={run}
-        disabled={loading}
-      >
-        {loading ? 'Evaluating…' : 'Evaluate with AI'}
-      </Button>
-    )
-  ) : null
-
-  return (
-    <div>
-      <StageCard stage={stage} href={href} evaluateButton={evaluateButton} />
-      {error && <p className="mt-1 text-xs text-red-600 px-1">{error}</p>}
-      {result && open && (
-        <div className="mt-2 border border-slate-200 rounded-xl bg-white p-4 space-y-3">
-          <div className="flex items-center justify-between flex-wrap gap-2">
-            <div className="flex items-center gap-2">
-              <ScoreBadge score={result.score} />
-              <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${result.ready ? 'bg-green-50 text-green-700' : 'bg-slate-100 text-slate-600'}`}>
-                {result.ready ? 'Ready' : 'Not yet ready'}
-              </span>
-            </div>
-            <button onClick={() => setOpen(false)} className="text-slate-400 hover:text-slate-700" aria-label="Dismiss">
-              <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
-            </button>
-          </div>
-          {result.recommendations?.length > 0 && (
-            <ul className="space-y-1.5">
-              {result.recommendations.map((r, i) => (
-                <li key={i} className="flex gap-2 text-sm text-slate-700"><span className="text-slate-400 shrink-0">-</span>{r}</li>
-              ))}
-            </ul>
-          )}
-        </div>
-      )}
-    </div>
-  )
+function StageRow({ stage, href }) {
+  return <StageCard stage={stage} href={href} />
 }
 
 // ─── Embed Widget Section ─────────────────────────────────────────────────────
@@ -508,7 +432,6 @@ export default function AgentTrainingPage() {
           <StageRow
             key={stage.stage}
             stage={stage}
-            agentId={agentId}
             href={
               stage.status !== 'Pending'
                 ? `/dashboard/brands/${brandId}/agents/${agentId}/stage/${stage.stage}`

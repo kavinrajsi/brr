@@ -1,15 +1,6 @@
 import { getUserFromRequest, getAdminClient, dbError } from '@/lib/supabase-server'
 import { anthropic, isAnthropicConfigured } from '@/lib/anthropic'
 
-const STAGES = [
-  { name: 'Brand Onboarding', description: 'Upload brand guidelines, tone of voice, and identity documents. The agent learns the foundational rules.' },
-  { name: 'Knowledge Base', description: 'Feed product catalogues, FAQs, and support docs. The agent builds its working knowledge of the business.' },
-  { name: 'Scenario Training', description: 'Run curated customer conversation scenarios. The agent practices applying brand tone to real situations.' },
-  { name: 'Edge Case Handling', description: 'Test escalation flows, sensitive topics, and edge cases. Ensure the agent knows its boundaries.' },
-  { name: 'Stress Testing', description: 'High-volume simulation to verify consistency under load. Scores must exceed threshold to advance.' },
-  { name: 'Certification', description: 'Final evaluation across all dimensions. On pass, the agent receives its certification and is ready to deploy.' },
-]
-
 async function assertAgentOwner(supabase, agentId, userId) {
   const { data } = await supabase
     .from('agents')
@@ -25,6 +16,233 @@ function parseAnthropicJson(text) {
   const cleaned = fenceMatch ? fenceMatch[1].trim() : text.trim()
   return JSON.parse(cleaned)
 }
+
+// ─── Stage-specific prompt builders ──────────────────────────────────────────
+
+function buildStage1Prompt(brandName, config) {
+  const facets = {
+    Physique:     ['physique', 'tagline', 'signature_products'],
+    Personality:  ['personality_traits', 'tone', 'response_style'],
+    Culture:      ['promise', 'key_values', 'culture_beliefs', 'culture_origin'],
+    Relationship: ['relationship_type', 'escalation_triggers', 'prohibited_topics', 'webhook_url'],
+    Reflection:   ['target_audience', 'reflection_archetype', 'customer_values'],
+    'Self-image': ['selfimage_feeling', 'selfimage_aspiration', 'response_guidelines'],
+  }
+
+  const facetSummary = Object.entries(facets).map(([name, fields]) => {
+    const filled = fields.filter(f => config[f]?.trim?.())
+    return `${name}: ${filled.length}/${fields.length} fields filled (${filled.length === 0 ? 'EMPTY' : filled.length < fields.length ? 'partial' : 'complete'})`
+  }).join('\n')
+
+  return `You are evaluating Stage 1 (Brand Onboarding) for "${brandName}".
+
+Brand Prism facet completeness:
+${facetSummary}
+
+Key fields:
+- Tone of voice: ${config.tone ? `"${config.tone}"` : 'MISSING'}
+- Response style: ${config.response_style ? `"${config.response_style}"` : 'MISSING'}
+- Brand promise: ${config.promise ? `"${config.promise}"` : 'MISSING'}
+- Core values: ${config.key_values ? `"${config.key_values}"` : 'MISSING'}
+- Prohibited topics: ${config.prohibited_topics ? `"${config.prohibited_topics}"` : 'MISSING'}
+- Escalation triggers: ${config.escalation_triggers ? `"${config.escalation_triggers}"` : 'MISSING'}
+
+Evaluate:
+1. Are all 6 Brand Prism facets meaningfully completed?
+2. Are the critical fields (tone, promise, prohibited topics, escalation triggers) specific enough to guide an AI agent?
+3. Is there anything vague, placeholder-like, or missing that would prevent the agent from representing the brand accurately?
+
+Score 1-10 (7+ = ready to advance). Give 3 specific, actionable recommendations.
+Respond ONLY with JSON: { "score": <1-10>, "ready": <true if score >= 7>, "recommendations": ["...", "...", "..."] }`
+}
+
+function buildStage2Prompt(brandName, config, testScores, scenarios, knowledgeDocs) {
+  const total = 25
+  const passed = Object.values(testScores ?? {}).filter(v => v === 'pass').length
+  const failed = Object.values(testScores ?? {}).filter(v => v === 'fail').length
+  const unscored = total - passed - failed
+  const pct = Math.round((passed / total) * 100)
+
+  const setCounts = ['A', 'B', 'C', 'D', 'E'].map(set => {
+    const setCounts = { pass: 0, fail: 0, total: scenarios.filter(s => s.test_set === set).length || [6,6,5,3,5][['A','B','C','D','E'].indexOf(set)] }
+    Object.entries(testScores ?? {}).forEach(([key, val]) => {
+      if (key.startsWith(set)) { if (val === 'pass') setCounts.pass++; else if (val === 'fail') setCounts.fail++ }
+    })
+    return `  Set ${set}: ${setCounts.pass} pass, ${setCounts.fail} fail, ${setCounts.total - setCounts.pass - setCounts.fail} unscored`
+  }).join('\n')
+
+  const docList = knowledgeDocs.length > 0
+    ? knowledgeDocs.map(d => `  - "${d.title}" (${d.content?.length ?? 0} chars)`).join('\n')
+    : '  None uploaded'
+
+  return `You are evaluating Stage 2 (Supervised Training) for "${brandName}".
+
+Test scenario results (need 20/25 = 80% to pass):
+- Passed: ${passed}/${total} (${pct}%)
+- Failed: ${failed}
+- Not yet scored: ${unscored}
+
+Results by set:
+${setCounts}
+
+Knowledge base documents:
+${docList}
+
+Brand tone: ${config.tone || 'not defined'}
+Target audience: ${config.target_audience || 'not defined'}
+
+Evaluate:
+1. Is the agent on track to meet the 80% pass threshold? ${pct >= 80 ? 'Currently passing.' : `Currently ${pct}% — needs ${20 - passed} more passes.`}
+2. Which test sets are weakest and why?
+3. Is the knowledge base sufficient to support the scenarios being tested?
+4. What specific areas need improvement before advancing?
+
+Score 1-10 (7+ = ready to advance). Give 3 specific, actionable recommendations.
+Respond ONLY with JSON: { "score": <1-10>, "ready": <true if score >= 7>, "recommendations": ["...", "...", "..."] }`
+}
+
+function buildStage3Prompt(brandName, config, validationResults) {
+  const w1 = validationResults?.week1 ?? {}
+  const w2 = validationResults?.week2 ?? {}
+
+  const weekSummary = (label, week) => {
+    if (!week.date && !week.notes) return `${label}: Not started`
+    return `${label}:
+  Status: ${week.passed === true ? 'PASSED' : week.passed === false ? 'FAILED' : 'Not evaluated'}
+  Date: ${week.date || 'not set'}
+  Notes: ${week.notes?.trim() ? `"${week.notes.trim()}"` : 'No notes written'}`
+  }
+
+  return `You are evaluating Stage 3 (Probation) for "${brandName}".
+
+Both weeks must pass to complete this stage.
+
+${weekSummary('Week 1', w1)}
+
+${weekSummary('Week 2', w2)}
+
+Brand voice reference:
+- Tone: ${config.tone || 'not defined'}
+- Prohibited topics: ${config.prohibited_topics || 'not defined'}
+- Escalation triggers: ${config.escalation_triggers || 'not defined'}
+
+Evaluate:
+1. Have both probation weeks been properly reviewed and passed?
+2. Are the review notes substantive — do they describe specific outputs reviewed, or are they vague/placeholder?
+3. Do the notes reflect real brand voice monitoring (tone adherence, prohibited topics respected, escalation handling)?
+4. What should be reviewed more rigorously before advancing?
+
+Score 1-10 (7+ = ready to advance). Give 3 specific, actionable recommendations.
+Respond ONLY with JSON: { "score": <1-10>, "ready": <true if score >= 7>, "recommendations": ["...", "...", "..."] }`
+}
+
+function buildStage4Prompt(brandName, config, validationResults) {
+  const tests = [
+    { id: 'test1', label: 'Write a Brand Caption',       desc: 'Agent writes a social media caption matching brand voice.' },
+    { id: 'test2', label: 'Identify Brand Violations',   desc: 'Agent reviews content and flags BRR violations.' },
+    { id: 'test3', label: 'Explain Brand Philosophy',    desc: 'Agent explains brand soul and core promise in its own words.' },
+  ]
+
+  const testSummary = tests.map(t => {
+    const result = validationResults?.[t.id] ?? {}
+    return `${t.label}:
+  Status: ${result.passed === true ? 'PASSED' : result.passed === false ? 'FAILED' : 'Not attempted'}
+  Agent output: ${result.output?.trim() ? `"${result.output.trim().slice(0, 300)}${result.output.length > 300 ? '…' : ''}"` : 'None provided'}
+  Evaluator notes: ${result.evaluator_notes?.trim() || 'None'}`
+  }).join('\n\n')
+
+  return `You are evaluating Stage 4 (Certification) for "${brandName}".
+
+All 3 certification tests must pass.
+
+${testSummary}
+
+Brand voice reference:
+- Tone: ${config.tone || 'not defined'}
+- Response style: ${config.response_style || 'not defined'}
+- Brand promise: ${config.promise || 'not defined'}
+- Core values: ${config.key_values || 'not defined'}
+- Prohibited topics: ${config.prohibited_topics || 'not defined'}
+
+Evaluate:
+1. Do the agent outputs genuinely reflect the brand's tone, values, and promise?
+2. For any passed tests: are the outputs strong enough to justify certification?
+3. For any failed or missing tests: what specifically needs to improve?
+4. Is the evaluator's judgment (notes) rigorous, or are tests being passed too easily?
+
+Score 1-10 (7+ = ready to certify). Give 3 specific, actionable recommendations.
+Respond ONLY with JSON: { "score": <1-10>, "ready": <true if score >= 7>, "recommendations": ["...", "...", "..."] }`
+}
+
+function buildStage5Prompt(brandName, config, validationResults) {
+  const spotChecks = validationResults?.spot_checks ?? []
+  const passed = spotChecks.filter(c => c.passed === true).length
+  const failed = spotChecks.filter(c => c.passed === false).length
+
+  const checkList = spotChecks.length > 0
+    ? spotChecks.map((c, i) =>
+        `  Check ${i + 1}: ${c.date || 'no date'} — ${c.passed === true ? 'PASS' : c.passed === false ? 'FAIL' : 'unscored'} — "${c.notes?.trim() || 'no notes'}"`
+      ).join('\n')
+    : '  No spot checks logged yet'
+
+  return `You are evaluating Stage 5 (Deployment) for "${brandName}".
+
+Deployment date: ${validationResults?.deployed_date || 'NOT SET'}
+
+Weekly spot-checks (${spotChecks.length} logged, ${passed} passed, ${failed} failed):
+${checkList}
+
+Monthly review notes:
+${validationResults?.monthly_review?.trim() ? `"${validationResults.monthly_review.trim()}"` : 'Not written yet'}
+
+Brand guardrails to monitor:
+- Prohibited topics: ${config.prohibited_topics || 'not defined'}
+- Escalation triggers: ${config.escalation_triggers || 'not defined'}
+- Tone: ${config.tone || 'not defined'}
+
+Evaluate:
+1. Is the deployment date recorded?
+2. Are spot checks being conducted regularly and with meaningful notes?
+3. Do the notes show active monitoring of brand voice, prohibited topics, and escalation handling?
+4. Does the monthly review summarise performance trends, not just state "all good"?
+
+Score 1-10 (7+ = healthy deployment). Give 3 specific, actionable recommendations.
+Respond ONLY with JSON: { "score": <1-10>, "ready": <true if score >= 7>, "recommendations": ["...", "...", "..."] }`
+}
+
+function buildStage6Prompt(brandName, config, validationResults) {
+  const updates = validationResults?.brr_updates ?? []
+
+  const updateList = updates.length > 0
+    ? updates.map((u, i) =>
+        `  Update ${i + 1}: v${u.version || '?'} on ${u.date || 'no date'} — "${u.description?.trim() || 'no description'}"`
+      ).join('\n')
+    : '  No BRR updates logged yet'
+
+  return `You are evaluating Stage 6 (Ongoing Learning) for "${brandName}".
+
+BRR update log (${updates.length} updates):
+${updateList}
+
+Re-training notes:
+${validationResults?.retraining_notes?.trim() ? `"${validationResults.retraining_notes.trim()}"` : 'Not written yet'}
+
+Current brand config summary:
+- Tone: ${config.tone || 'not defined'}
+- Brand promise: ${config.promise || 'not defined'}
+- Core values: ${config.key_values || 'not defined'}
+
+Evaluate:
+1. Are BRR updates being logged with enough detail (version, date, what changed and why)?
+2. Do the updates reflect real brand evolution, not just cosmetic tweaks?
+3. Are re-training cycles being triggered when the BRR changes, and are the notes substantive?
+4. Is this brand keeping its AI agent current with how the brand actually operates?
+
+Score 1-10 (7+ = healthy ongoing learning). Give 3 specific, actionable recommendations.
+Respond ONLY with JSON: { "score": <1-10>, "ready": <true if score >= 7>, "recommendations": ["...", "...", "..."] }`
+}
+
+// ─── Route handler ────────────────────────────────────────────────────────────
 
 export async function POST(req, { params }) {
   if (!isAnthropicConfigured()) {
@@ -44,37 +262,41 @@ export async function POST(req, { params }) {
   const owned = await assertAgentOwner(supabase, agentId, user.id)
   if (!owned) return Response.json({ error: 'Agent not found' }, { status: 404 })
 
-  const { data: brandConfigRow, error: configError } = await supabase
-    .from('brand_configs')
-    .select('config')
-    .eq('brand_id', owned.brand_id)
-    .single()
+  // Fetch all context in parallel
+  const [configResult, stageResult, knowledgeResult, scenariosResult] = await Promise.all([
+    supabase.from('brand_configs').select('config').eq('brand_id', owned.brand_id).single(),
+    supabase.from('training_progress').select('validation_results, test_scores').eq('agent_id', agentId).eq('stage', stageNum).single(),
+    supabase.from('brand_knowledge').select('title, content').eq('brand_id', owned.brand_id),
+    stageNum === 2
+      ? supabase.from('test_scenarios').select('test_set, scenario_number, input_prompt').eq('brand_id', owned.brand_id).order('test_set').order('scenario_number')
+      : Promise.resolve({ data: [] }),
+  ])
 
-  if (configError && configError.code !== 'PGRST116') return dbError(configError)
+  const config            = configResult.data?.config ?? {}
+  const validationResults = stageResult.data?.validation_results ?? {}
+  const testScores        = stageResult.data?.test_scores ?? {}
+  const knowledgeDocs     = knowledgeResult.data ?? []
+  const scenarios         = scenariosResult.data ?? []
 
-  const config = brandConfigRow?.config ?? {}
-  const stageInfo = STAGES[stageNum - 1]
+  const brandName = owned.brands.name
 
-  const userMessage = `
-You are evaluating a brand AI agent for "${owned.brands.name}".
+  const prompts = {
+    1: () => buildStage1Prompt(brandName, config),
+    2: () => buildStage2Prompt(brandName, config, testScores, scenarios, knowledgeDocs),
+    3: () => buildStage3Prompt(brandName, config, validationResults),
+    4: () => buildStage4Prompt(brandName, config, validationResults),
+    5: () => buildStage5Prompt(brandName, config, validationResults),
+    6: () => buildStage6Prompt(brandName, config, validationResults),
+  }
 
-Stage ${stageNum}: ${stageInfo.name}
-Description: ${stageInfo.description}
-
-Brand Configuration:
-${JSON.stringify(config, null, 2)}
-
-Assess whether this agent has enough brand-specific configuration to succeed at Stage ${stageNum}.
-Rate readiness 1-10 and provide 3 specific, actionable recommendations.
-Respond ONLY with JSON: { "score": <1-10>, "ready": <true if score >= 7>, "recommendations": ["...", "...", "..."] }
-`.trim()
+  const userMessage = prompts[stageNum]()
 
   let evaluationResponse
   try {
     evaluationResponse = await anthropic.messages.create({
       model: 'claude-haiku-4-5-20251001',
-      max_tokens: 512,
-      system: 'You are an expert brand AI training evaluator. Assess agent readiness and respond only with valid JSON.',
+      max_tokens: 600,
+      system: 'You are an expert brand AI training evaluator. Assess agent readiness based on the specific stage criteria provided. Respond only with valid JSON.',
       messages: [{ role: 'user', content: userMessage }],
     })
   } catch (err) {

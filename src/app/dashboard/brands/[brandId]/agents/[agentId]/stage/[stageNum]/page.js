@@ -13,38 +13,107 @@ import Link from 'next/link'
 // ─── Stage 1: Onboarding ────────────────────────────────────────────────────
 
 const ONBOARDING_CHECKS = [
-  { id: 'brand_name',      label: 'Brand name and identity confirmed' },
-  { id: 'brr_complete',    label: 'Brand Road Rules (BRR) configuration completed' },
-  { id: 'tone_defined',    label: 'Tone of voice and personality defined' },
-  { id: 'promise_set',     label: 'Core promise and brand soul established' },
-  { id: 'non_negotiables', label: 'Non-negotiables and restrictions documented' },
+  {
+    id: 'brand_name',
+    label: 'Brand name and identity confirmed',
+    hint: 'Set your brand name and short name when creating the brand.',
+    verify: (brand, cfg) => !!(brand?.name?.trim() && brand?.short_name?.trim()),
+  },
+  {
+    id: 'brr_complete',
+    label: 'Brand Road Rules (BRR) configuration completed',
+    hint: 'At least one field in each of the 6 Brand Prism facets must be filled.',
+    verify: (brand, cfg) => {
+      const facets = [
+        ['physique', 'tagline', 'signature_products'],
+        ['personality_traits', 'tone', 'response_style'],
+        ['promise', 'key_values', 'culture_beliefs'],
+        ['relationship_type', 'escalation_triggers', 'prohibited_topics'],
+        ['target_audience', 'reflection_archetype', 'customer_values'],
+        ['selfimage_feeling', 'selfimage_aspiration'],
+      ]
+      return facets.every(fields => fields.some(f => cfg?.[f]?.trim?.()))
+    },
+  },
+  {
+    id: 'tone_defined',
+    label: 'Tone of voice and personality defined',
+    hint: 'Fill in Tone of Voice and Response Style in Configure Brand → Personality.',
+    verify: (brand, cfg) => !!(cfg?.tone?.trim() && cfg?.response_style?.trim()),
+  },
+  {
+    id: 'promise_set',
+    label: 'Core promise and brand soul established',
+    hint: 'Fill in Brand Promise and Core Values in Configure Brand → Culture.',
+    verify: (brand, cfg) => !!(cfg?.promise?.trim() && cfg?.key_values?.trim()),
+  },
+  {
+    id: 'non_negotiables',
+    label: 'Non-negotiables and restrictions documented',
+    hint: 'Fill in Prohibited Topics and Escalation Triggers in Configure Brand → Relationship.',
+    verify: (brand, cfg) => !!(cfg?.prohibited_topics?.trim() && cfg?.escalation_triggers?.trim()),
+  },
 ]
 
-function Stage1({ results, onChange }) {
+function Stage1({ brand, brandConfig, results, onChange }) {
+  const cfg = brandConfig?.config ?? {}
+  const configLoaded = !!brandConfig
+
   return (
     <div className="space-y-3">
       <p className="text-sm text-slate-600 mb-4">
-        Verify all 5 onboarding requirements are complete before moving to supervised training.
+        Each requirement is verified against your brand configuration. Go to{' '}
+        <a href={`/dashboard/brands/${brand?.id}/config`} className="underline text-blue-600">Configure Brand</a>{' '}
+        to fill in any missing fields.
       </p>
-      {ONBOARDING_CHECKS.map(item => (
-        <label
-          key={item.id}
-          className={[
-            'flex items-center gap-3 p-4 rounded-lg border cursor-pointer transition-colors',
-            results[item.id] ? 'bg-green-50 border-green-200' : 'bg-white border-slate-200 hover:bg-slate-50',
-          ].join(' ')}
-        >
-          <input
-            type="checkbox"
-            checked={!!results[item.id]}
-            onChange={e => onChange({ ...results, [item.id]: e.target.checked })}
-            className="w-4 h-4 accent-green-600"
-          />
-          <span className={`text-sm ${results[item.id] ? 'text-green-800 font-medium' : 'text-slate-700'}`}>
-            {item.label}
-          </span>
-        </label>
-      ))}
+      {ONBOARDING_CHECKS.map(item => {
+        const verified = configLoaded ? item.verify(brand, cfg) : false
+
+        // keep results in sync when verification changes
+        if (configLoaded && results[item.id] !== verified) {
+          setTimeout(() => onChange({ ...results, [item.id]: verified }), 0)
+        }
+
+        return (
+          <div
+            key={item.id}
+            className={[
+              'flex items-start gap-3 p-4 rounded-lg border',
+              verified ? 'bg-green-50 border-green-200' : 'bg-amber-50 border-amber-200',
+            ].join(' ')}
+          >
+            <div className={`mt-0.5 w-5 h-5 rounded-full flex items-center justify-center shrink-0 ${verified ? 'bg-green-500' : 'bg-amber-300'}`}>
+              {verified
+                ? <svg className="w-3 h-3 text-white" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><polyline points="20 6 9 17 4 12"/></svg>
+                : <svg className="w-3 h-3 text-white" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+              }
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className={`text-sm font-medium ${verified ? 'text-green-800' : 'text-amber-800'}`}>
+                {item.label}
+              </p>
+              {!verified && (
+                <p className="text-xs text-amber-700 mt-0.5">{item.hint}</p>
+              )}
+              {verified && (
+                <p className="text-xs text-green-600 mt-0.5">Verified from brand configuration</p>
+              )}
+            </div>
+            {!verified && (
+              <a
+                href={`/dashboard/brands/${brand?.id}/config`}
+                className="text-xs text-blue-600 underline shrink-0 mt-0.5"
+              >
+                Fix →
+              </a>
+            )}
+          </div>
+        )
+      })}
+
+      {!configLoaded && (
+        <p className="text-xs text-slate-400 text-center pt-2">Loading brand configuration…</p>
+      )}
     </div>
   )
 }
@@ -503,6 +572,174 @@ function Stage6({ results, onChange }) {
   )
 }
 
+// ─── Evaluate with AI ────────────────────────────────────────────────────────
+
+function ScoreBadge({ score }) {
+  if (score == null) return null
+  const color = score >= 7 ? 'bg-green-100 text-green-800 border-green-200'
+    : score >= 4 ? 'bg-yellow-100 text-yellow-800 border-yellow-200'
+    : 'bg-red-100 text-red-800 border-red-200'
+  return <span className={`text-sm font-bold px-2.5 py-0.5 rounded-full border ${color}`}>{score}/10</span>
+}
+
+function EvalResultPanel({ result, onDismiss, onFix }) {
+  if (!result) return null
+  const showFix = !result.ready
+  return (
+    <div className="mt-4 border border-slate-200 rounded-xl bg-white p-5 space-y-3">
+      <div className="flex items-center justify-between flex-wrap gap-2">
+        <div className="flex items-center gap-2">
+          <ScoreBadge score={result.score} />
+          <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${result.ready ? 'bg-green-50 text-green-700' : 'bg-amber-50 text-amber-700'}`}>
+            {result.ready ? 'Ready to advance' : 'Not yet ready'}
+          </span>
+        </div>
+        <button onClick={onDismiss} className="text-slate-400 hover:text-slate-700" aria-label="Dismiss">
+          <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+        </button>
+      </div>
+      {result.recommendations?.length > 0 && (
+        <ul className="space-y-1.5">
+          {result.recommendations.map((r, i) => (
+            <li key={i} className="flex gap-2 text-sm text-slate-700">
+              <span className="text-slate-400 shrink-0">–</span>{r}
+            </li>
+          ))}
+        </ul>
+      )}
+      {showFix && (
+        <div className="pt-1 border-t border-slate-100">
+          <button
+            onClick={onFix}
+            className="text-xs font-medium text-violet-700 hover:text-violet-900 flex items-center gap-1.5"
+          >
+            <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>
+            Fix these issues with AI →
+          </button>
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ─── AI Fix Loading Steps ─────────────────────────────────────────────────────
+
+const FIX_STEPS = [
+  { key: 'fetch',    label: 'Fetching stage data and brand configuration' },
+  { key: 'analyze',  label: 'Analysing what is missing or incomplete' },
+  { key: 'generate', label: 'Generating specific suggestions with AI' },
+]
+
+function AiFixLoading({ step }) {
+  const stepIndex = FIX_STEPS.findIndex(s => s.key === step)
+
+  return (
+    <div className="mt-4 border border-violet-200 rounded-xl bg-violet-50 px-5 py-5">
+      <div className="flex items-center gap-2 mb-4">
+        <svg className="w-4 h-4 text-violet-500 animate-pulse" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2a10 10 0 1 0 10 10A10 10 0 0 0 12 2zm1 14.93V17a1 1 0 0 1-2 0v-.07A8 8 0 0 1 4.07 11H4a1 1 0 0 1 0-2h.07A8 8 0 0 1 11 4.07V4a1 1 0 0 1 2 0v.07A8 8 0 0 1 19.93 11H20a1 1 0 0 1 0 2h-.07A8 8 0 0 1 13 16.93z"/></svg>
+        <p className="text-sm font-semibold text-violet-900">AI Fix in progress…</p>
+      </div>
+      <div className="space-y-3">
+        {FIX_STEPS.map((s, i) => {
+          const done    = i < stepIndex
+          const current = i === stepIndex
+          const pending = i > stepIndex
+          return (
+            <div key={s.key} className="flex items-center gap-3">
+              <div className={`w-5 h-5 rounded-full flex items-center justify-center shrink-0 ${
+                done    ? 'bg-green-500' :
+                current ? 'bg-violet-500' :
+                          'bg-slate-200'
+              }`}>
+                {done && (
+                  <svg className="w-3 h-3 text-white" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><polyline points="20 6 9 17 4 12"/></svg>
+                )}
+                {current && (
+                  <svg className="w-3 h-3 text-white animate-spin" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg>
+                )}
+                {pending && (
+                  <div className="w-2 h-2 rounded-full bg-slate-400" />
+                )}
+              </div>
+              <p className={`text-sm ${
+                done    ? 'text-green-700 line-through' :
+                current ? 'text-violet-800 font-medium' :
+                          'text-slate-400'
+              }`}>
+                {s.label}
+              </p>
+            </div>
+          )
+        })}
+      </div>
+    </div>
+  )
+}
+
+// ─── AI Fix Panel ─────────────────────────────────────────────────────────────
+
+function AiFixPanel({ fixResult, applying, onApply, onDismiss }) {
+  if (!fixResult) return null
+
+  const { summary, changes } = fixResult
+
+  return (
+    <div className="mt-4 border border-violet-200 rounded-xl bg-violet-50 overflow-hidden">
+      <div className="flex items-center justify-between px-5 py-3 border-b border-violet-200 bg-violet-100">
+        <div className="flex items-center gap-2">
+          <svg className="w-4 h-4 text-violet-600" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>
+          <p className="text-sm font-semibold text-violet-900">AI Fix — Review before applying</p>
+        </div>
+        <button onClick={onDismiss} className="text-violet-400 hover:text-violet-700">
+          <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+        </button>
+      </div>
+
+      <div className="px-5 py-4 space-y-3">
+        <p className="text-xs text-violet-700 font-medium">{summary}</p>
+
+        <div className="space-y-2">
+          {changes.map((change, i) => (
+            <div key={i} className="bg-white border border-violet-100 rounded-lg p-3">
+              <p className="text-xs font-semibold text-slate-700 mb-1.5">{change.label}</p>
+              <div className="space-y-1">
+                {change.from != null && (
+                  <div className="flex gap-2 items-start">
+                    <span className="text-xs text-red-500 font-mono shrink-0 mt-0.5">−</span>
+                    <p className="text-xs text-red-700 bg-red-50 rounded px-2 py-1 w-full">{String(change.from)}</p>
+                  </div>
+                )}
+                <div className="flex gap-2 items-start">
+                  <span className="text-xs text-green-600 font-mono shrink-0 mt-0.5">+</span>
+                  <p className="text-xs text-green-800 bg-green-50 rounded px-2 py-1 w-full whitespace-pre-wrap">{String(change.to)}</p>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+
+        {changes.length === 0 && (
+          <p className="text-xs text-violet-600 text-center py-2">No specific changes to show — check the summary above.</p>
+        )}
+      </div>
+
+      <div className="flex gap-2 px-5 py-3 border-t border-violet-200 bg-violet-50">
+        <Button
+          size="sm"
+          onClick={onApply}
+          disabled={applying}
+          className="bg-violet-600 hover:bg-violet-700 text-white"
+        >
+          {applying ? 'Applying…' : 'Apply Changes'}
+        </Button>
+        <Button size="sm" variant="outline" onClick={onDismiss} disabled={applying}>
+          Dismiss
+        </Button>
+      </div>
+    </div>
+  )
+}
+
 // ─── Completion rules ────────────────────────────────────────────────────────
 
 function canComplete(num, results, scores) {
@@ -528,6 +765,16 @@ export default function StagePage() {
   const [saved, setSaved] = useState(false)
   const [saveError, setSaveError] = useState('')
   const [scenarios, setScenarios] = useState([])
+  const [brand, setBrand] = useState(null)
+  const [brandConfig, setBrandConfig] = useState(null)
+  const [isEvaluating, setIsEvaluating] = useState(false)
+  const [evalResult, setEvalResult]     = useState(null)
+  const [evalError, setEvalError]       = useState('')
+  const [isFixing, setIsFixing] = useState(false)
+  const [fixStep, setFixStep] = useState(null)
+  const [fixResult, setFixResult] = useState(null)
+  const [isApplying, setIsApplying] = useState(false)
+  const [fixError, setFixError] = useState('')
 
   const stage = getStage(num)
 
@@ -541,6 +788,12 @@ export default function StagePage() {
   useEffect(() => {
     if (num === 2 && brandId) {
       apiCall(`/api/brands/${brandId}/scenarios`).then(setScenarios).catch(() => {})
+    }
+    if (num === 1 && brandId) {
+      Promise.all([
+        apiCall(`/api/brands/${brandId}`),
+        apiCall(`/api/brands/${brandId}/config`),
+      ]).then(([b, cfg]) => { setBrand(b); setBrandConfig(cfg) }).catch(() => {})
     }
   }, [num, brandId])
 
@@ -559,6 +812,93 @@ export default function StagePage() {
       }
     } catch (err) {
       setSaveError(err.message)
+    }
+  }
+
+  const handleEvaluate = async () => {
+    setIsEvaluating(true)
+    setEvalError('')
+    setEvalResult(null)
+    try {
+      const res = await apiCall(`/api/agents/${agentId}/training/${num}/evaluate`, { method: 'POST' })
+      setEvalResult(res)
+    } catch (err) {
+      setEvalError(err.message)
+    } finally {
+      setIsEvaluating(false)
+    }
+  }
+
+  const handleFix = async () => {
+    setIsFixing(true)
+    setFixStep('fetch')
+    setFixError('')
+    setFixResult(null)
+
+    // Step timings aligned with what the API actually does:
+    // fetch → immediate, analyze → ~600ms, generate → ~1400ms
+    const t1 = setTimeout(() => setFixStep('analyze'),  600)
+    const t2 = setTimeout(() => setFixStep('generate'), 1400)
+
+    try {
+      const res = await apiCall(`/api/agents/${agentId}/training/${num}/fix`, { method: 'POST' })
+      if (res.error) { setFixError(res.error); return }
+      if (res.changes?.length === 0 && !res.patch) {
+        setFixError(res.message ?? 'Nothing to fix — all data is already complete.')
+        return
+      }
+      setFixResult(res)
+    } catch (err) {
+      setFixError(err.message)
+    } finally {
+      clearTimeout(t1)
+      clearTimeout(t2)
+      setIsFixing(false)
+      setFixStep(null)
+    }
+  }
+
+  const handleApply = async () => {
+    if (!fixResult?.patch) return
+    setIsApplying(true)
+    try {
+      const { patch, brandId: fixBrandId } = fixResult
+
+      if (patch.type === 'brand_config') {
+        // Merge new config fields into existing brand config
+        const currentCfg = brandConfig?.config ?? {}
+        const merged = { ...currentCfg, ...patch.config }
+        await apiCall(`/api/brands/${fixBrandId}/config`, {
+          method: 'PUT',
+          body: JSON.stringify({ config: merged }),
+        })
+        // Refresh brand config so Stage 1 re-validates
+        const updated = await apiCall(`/api/brands/${fixBrandId}/config`)
+        setBrandConfig(updated)
+      } else {
+        // Merge into existing training_progress
+        const newResults = patch.validation_results
+          ? { ...results, ...patch.validation_results }
+          : results
+        const newScores = patch.test_scores
+          ? { ...scores, ...patch.test_scores }
+          : scores
+        await saveStage(num, {
+          status: stage?.status === 'Complete' ? 'Complete' : 'In Progress',
+          validation_results: newResults,
+          test_scores: newScores,
+        })
+        setResults(newResults)
+        setScores(newScores)
+      }
+
+      setFixResult(null)
+      setSaved(true)
+      setTimeout(() => setSaved(false), 3000)
+    } catch (err) {
+      setFixError(err.message)
+    } finally {
+      setIsApplying(false)
     }
   }
 
@@ -610,7 +950,7 @@ export default function StagePage() {
       )}
 
       <Card className="p-8 mb-6">
-        {num === 1 && <Stage1 results={results} onChange={setResults} />}
+        {num === 1 && <Stage1 brand={brand} brandConfig={brandConfig} results={results} onChange={setResults} />}
         {num === 2 && <Stage2 scores={scores} onChange={setScores} scenarios={scenarios} brandId={brandId} agentId={agentId} />}
         {num === 3 && <Stage3 results={results} onChange={setResults} />}
         {num === 4 && <Stage4 results={results} onChange={setResults} />}
@@ -618,9 +958,29 @@ export default function StagePage() {
         {num === 6 && <Stage6 results={results} onChange={setResults} />}
 
         <div className="flex gap-3 mt-8 flex-wrap">
-          <Button variant="outline" onClick={() => handleSave(false)} disabled={isSaving}>
+          <Button variant="outline" onClick={() => handleSave(false)} disabled={isSaving || isFixing}>
             {isSaving ? 'Saving…' : 'Save Progress'}
           </Button>
+          {!isComplete && (
+            <Button
+              variant="outline"
+              onClick={handleEvaluate}
+              disabled={isEvaluating || isSaving || isFixing}
+              className="text-blue-700 border-blue-200 hover:bg-blue-50"
+            >
+              {isEvaluating ? 'Evaluating…' : 'Evaluate with AI'}
+            </Button>
+          )}
+          {!isComplete && (
+            <Button
+              variant="outline"
+              onClick={handleFix}
+              disabled={isFixing || isSaving || isEvaluating}
+              className="text-violet-700 border-violet-200 hover:bg-violet-50"
+            >
+              AI Fix
+            </Button>
+          )}
 
           {!isComplete && (
             <Button
@@ -645,6 +1005,35 @@ export default function StagePage() {
           )}
         </div>
       </Card>
+
+      {evalError && (
+        <Alert variant="destructive" className="mb-4">
+          <AlertDescription>{evalError}</AlertDescription>
+        </Alert>
+      )}
+
+      <EvalResultPanel
+        result={evalResult}
+        onDismiss={() => setEvalResult(null)}
+        onFix={() => { setEvalResult(null); handleFix() }}
+      />
+
+      {fixError && (
+        <Alert variant="destructive" className="mb-4">
+          <AlertDescription>{fixError}</AlertDescription>
+        </Alert>
+      )}
+
+      {isFixing && fixStep && <AiFixLoading step={fixStep} />}
+
+      {!isFixing && (
+        <AiFixPanel
+          fixResult={fixResult}
+          applying={isApplying}
+          onApply={handleApply}
+          onDismiss={() => { setFixResult(null); setFixError('') }}
+        />
+      )}
 
       {/* Stage-specific hints */}
       {num === 1 && !isComplete && (

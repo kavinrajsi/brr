@@ -19,7 +19,7 @@ const STATUS_CONFIG = {
   Failed:      { bg: 'bg-red-50 border-red-200',     badge: 'bg-red-100 text-red-700',       label: 'Failed'      },
 }
 
-export function StageCard({ stage, href, evaluateButton }) {
+export function StageCard({ stage, href }) {
   if (!stage) return null
 
   const cfg = STATUS_CONFIG[stage.status] ?? STATUS_CONFIG.Pending
@@ -50,8 +50,6 @@ export function StageCard({ stage, href, evaluateButton }) {
       <span className={`text-xs font-medium px-2 py-0.5 rounded-full shrink-0 ${cfg.badge}`}>
         {cfg.label}
       </span>
-
-      {evaluateButton}
 
       {href && !isPending ? (
         <Link href={href} className="shrink-0">

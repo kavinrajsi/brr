@@ -136,7 +136,7 @@ export default function BrandPrismPage() {
         <div className="flex items-start justify-between">
           <div>
             <h1 className="text-3xl font-bold text-slate-900">Brand Prism</h1>
-            <p className="text-slate-600 mt-1">Kapferer's six-facet brand identity model</p>
+            <p className="text-slate-600 mt-1">Kapferer&apos;s six-facet brand identity model</p>
           </div>
           <div className="flex gap-2">
             <Button variant="outline" onClick={handleDownload} disabled={!hasAnyData}>
