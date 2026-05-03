@@ -41,3 +41,15 @@ export function dbError(error, status = 400) {
   console.error('[db]', error?.message)
   return Response.json({ error: 'An unexpected error occurred' }, { status })
 }
+
+// Platform admin allowlist sourced from ADMIN_USER_IDS env (comma-separated user UUIDs).
+// Use for routes that expose cross-tenant data (e.g. /api/admin/users).
+const ADMIN_IDS = (process.env.ADMIN_USER_IDS ?? '')
+  .split(',')
+  .map(s => s.trim())
+  .filter(Boolean)
+
+export function isPlatformAdmin(user) {
+  if (!user?.id) return false
+  return ADMIN_IDS.includes(user.id)
+}

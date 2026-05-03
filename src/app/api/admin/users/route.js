@@ -1,9 +1,10 @@
-import { getUserFromRequest, getAdminClient } from '@/lib/supabase-server'
+import { getUserFromRequest, getAdminClient, isPlatformAdmin } from '@/lib/supabase-server'
 import { PLANS } from '@/lib/stripe'
 
 export async function GET(req) {
   const user = await getUserFromRequest(req)
   if (!user) return Response.json({ error: 'Unauthorized' }, { status: 401 })
+  if (!isPlatformAdmin(user)) return Response.json({ error: 'Forbidden' }, { status: 403 })
 
   const supabase = getAdminClient()
 

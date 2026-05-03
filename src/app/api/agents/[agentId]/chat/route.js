@@ -87,19 +87,33 @@ export async function POST(req, { params }) {
     ? String(config.escalation_triggers).split(',').map(s => s.trim().toLowerCase()).filter(Boolean)
     : []
 
-  // Load conversation history
-  let activeConversationId = conversationId
+  // Load conversation history. Verify the conversation belongs to THIS agent
+  // before reading messages — prevents cross-agent IDOR via a forged conversationId.
+  let activeConversationId = null
   let history = []
 
-  if (activeConversationId) {
-    const { data: msgs } = await supabase
-      .from('conversation_messages')
-      .select('role, content')
-      .eq('conversation_id', activeConversationId)
-      .order('created_at', { ascending: true })
-      .limit(20)
-    history = msgs ?? []
-  } else {
+  if (conversationId) {
+    const { data: conv } = await supabase
+      .from('agent_conversations')
+      .select('id')
+      .eq('id', conversationId)
+      .eq('agent_id', agentId)
+      .single()
+
+    if (conv) {
+      activeConversationId = conv.id
+      const { data: msgs } = await supabase
+        .from('conversation_messages')
+        .select('role, content')
+        .eq('conversation_id', activeConversationId)
+        .order('created_at', { ascending: true })
+        .limit(20)
+      history = msgs ?? []
+    }
+    // If conv was not found (wrong agent or doesn't exist), fall through to creating a new one.
+  }
+
+  if (!activeConversationId) {
     const { data: conv } = await supabase
       .from('agent_conversations')
       .insert({ agent_id: agentId })

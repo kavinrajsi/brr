@@ -1,6 +1,18 @@
 import { getUserFromRequest, getAdminClient } from '@/lib/supabase-server'
 import { onBrandMutated } from '@/lib/cache-invalidation'
 
+// Allowlist of fields a user may modify on a brand. Excludes user_id, created_at,
+// status, current_stage, and any other server-owned columns to prevent mass-assignment.
+const ALLOWED_BRAND_FIELDS = ['name', 'short_name', 'notes']
+
+function pickAllowed(fields) {
+  const out = {}
+  for (const key of ALLOWED_BRAND_FIELDS) {
+    if (fields[key] !== undefined) out[key] = fields[key]
+  }
+  return out
+}
+
 export async function POST(req) {
   const user = await getUserFromRequest(req)
   if (!user) return Response.json({ error: 'Unauthorized' }, { status: 401 })
@@ -32,11 +44,18 @@ export async function POST(req) {
   let failed = 0
 
   for (const { id, ...fields } of updates) {
+    const safeFields = pickAllowed(fields)
+    if (Object.keys(safeFields).length === 0) {
+      results.push({ id, status: 'failed', error: 'No allowed fields supplied' })
+      failed++
+      continue
+    }
     try {
       const { data, error } = await supabase
         .from('brands')
-        .update({ ...fields, updated_at: new Date().toISOString() })
+        .update({ ...safeFields, updated_at: new Date().toISOString() })
         .eq('id', id)
+        .eq('user_id', user.id)
         .select()
         .single()
 

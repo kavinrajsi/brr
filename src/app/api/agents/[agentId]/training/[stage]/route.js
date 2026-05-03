@@ -1,5 +1,5 @@
 import { getUserFromRequest, getAdminClient, dbError } from '@/lib/supabase-server'
-import { completeStage, failStage } from '@/lib/training-manager'
+import { completeStage, failStage, updateStageProgress } from '@/lib/training-manager'
 
 const ALLOWED_STATUSES = ['In Progress', 'Complete', 'Failed']
 
@@ -64,54 +64,28 @@ export async function PUT(req, { params }) {
     )
   }
 
-  // Route terminal transitions through training-manager to enforce state-machine invariants
-  if (status === 'Complete') {
-    try {
-      const data = await completeStage(agentId, stageNum, validation_results ?? {})
-      if (test_scores !== undefined || notes !== undefined) {
-        await supabase
-          .from('training_progress')
-          .update({ ...(test_scores !== undefined && { test_scores }), ...(notes !== undefined && { notes }) })
-          .eq('agent_id', agentId)
-          .eq('stage', stageNum)
-      }
+  // All training_progress mutations route through training-manager to enforce
+  // state-machine invariants (per CLAUDE.md). No direct supabase writes here.
+  try {
+    if (status === 'Complete') {
+      const data = await completeStage(agentId, stageNum, validation_results ?? {}, { test_scores, notes })
       return Response.json(data)
-    } catch (err) {
-      return dbError(err)
     }
-  }
 
-  if (status === 'Failed') {
-    try {
-      const data = await failStage(agentId, stageNum, validation_results?.failureReason ?? '')
-      if (test_scores !== undefined || notes !== undefined) {
-        await supabase
-          .from('training_progress')
-          .update({ ...(test_scores !== undefined && { test_scores }), ...(notes !== undefined && { notes }) })
-          .eq('agent_id', agentId)
-          .eq('stage', stageNum)
-      }
+    if (status === 'Failed') {
+      const data = await failStage(agentId, stageNum, validation_results?.failureReason ?? '', { test_scores, notes })
       return Response.json(data)
-    } catch (err) {
-      return dbError(err)
     }
-  }
 
-  // Non-terminal update (notes, scores, validation data on the active stage)
-  const { data, error } = await supabase
-    .from('training_progress')
-    .update({
-      ...(status !== undefined && { status }),
-      ...(validation_results !== undefined && { validation_results }),
-      ...(test_scores !== undefined && { test_scores }),
-      ...(notes !== undefined && { notes }),
-      updated_at: new Date().toISOString(),
+    // Non-terminal update (notes, scores, validation data on the active stage)
+    const data = await updateStageProgress(agentId, stageNum, {
+      status,
+      validation_results,
+      test_scores,
+      notes,
     })
-    .eq('agent_id', agentId)
-    .eq('stage', stageNum)
-    .select()
-    .single()
-
-  if (error) return dbError(error)
-  return Response.json(data)
+    return Response.json(data)
+  } catch (err) {
+    return dbError(err)
+  }
 }

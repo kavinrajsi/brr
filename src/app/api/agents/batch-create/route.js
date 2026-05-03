@@ -1,4 +1,5 @@
 import { getUserFromRequest, getAdminClient, dbError } from '@/lib/supabase-server'
+import { getUserPlanLimits } from '@/lib/stripe'
 
 export async function POST(req) {
   const user = await getUserFromRequest(req)
@@ -14,14 +15,35 @@ export async function POST(req) {
   }
 
   const supabase = getAdminClient()
-  const { data: owned } = await supabase
-    .from('brands')
-    .select('id')
-    .eq('user_id', user.id)
-    .in('id', brandIds)
+
+  // Verify ownership and gather data needed to enforce the plan agent quota
+  const [{ data: owned }, { data: userBrandRows }, limits] = await Promise.all([
+    supabase.from('brands').select('id').eq('user_id', user.id).in('id', brandIds),
+    supabase.from('brands').select('id').eq('user_id', user.id),
+    getUserPlanLimits(user.id, supabase),
+  ])
 
   if (!owned || owned.length !== brandIds.length) {
     return Response.json({ error: 'You do not own all specified brands' }, { status: 403 })
+  }
+
+  // Enforce plan limit: existing + requested must not exceed the cap
+  const userBrandIds = (userBrandRows ?? []).map(b => b.id)
+  const { count: existingAgents } = userBrandIds.length
+    ? await supabase.from('agents').select('*', { count: 'exact', head: true }).in('brand_id', userBrandIds)
+    : { count: 0 }
+
+  const projected = (existingAgents ?? 0) + brandIds.length
+  if (projected > limits.agents) {
+    return Response.json(
+      {
+        error: `Agent limit would be exceeded (${projected}/${limits.agents}). Upgrade your plan or reduce the batch size.`,
+        existing: existingAgents ?? 0,
+        requested: brandIds.length,
+        cap: limits.agents,
+      },
+      { status: 403 }
+    )
   }
 
   const agents = brandIds.map((brandId, idx) => ({

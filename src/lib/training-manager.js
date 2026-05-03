@@ -40,15 +40,19 @@ export async function createTrainingCheckpoint(agentId, stage, validationData = 
   return data
 }
 
-export async function completeStage(agentId, stage, results = {}) {
+export async function completeStage(agentId, stage, results = {}, extras = {}) {
   const supabase = getAdminClient()
+  const update = {
+    status: 'Complete',
+    validation_results: results,
+    completed_at: new Date().toISOString(),
+  }
+  if (extras.test_scores !== undefined) update.test_scores = extras.test_scores
+  if (extras.notes       !== undefined) update.notes       = extras.notes
+
   const { data, error } = await supabase
     .from('training_progress')
-    .update({
-      status: 'Complete',
-      validation_results: results,
-      completed_at: new Date().toISOString(),
-    })
+    .update(update)
     .eq('agent_id', agentId)
     .eq('stage', stage)
     .select()
@@ -74,11 +78,45 @@ export async function completeStage(agentId, stage, results = {}) {
   return data
 }
 
-export async function failStage(agentId, stage, reason = '') {
+export async function failStage(agentId, stage, reason = '', extras = {}) {
   const supabase = getAdminClient()
+  const update = { status: 'Failed', validation_results: { failureReason: reason } }
+  if (extras.test_scores !== undefined) update.test_scores = extras.test_scores
+  if (extras.notes       !== undefined) update.notes       = extras.notes
+
   const { data, error } = await supabase
     .from('training_progress')
-    .update({ status: 'Failed', validation_results: { failureReason: reason } })
+    .update(update)
+    .eq('agent_id', agentId)
+    .eq('stage', stage)
+    .select()
+    .single()
+
+  if (error) throw error
+  return data
+}
+
+// Non-terminal stage update — for in-progress edits to validation_results,
+// test_scores, or notes. Status changes to Complete/Failed must go through
+// completeStage/failStage, not this helper.
+export async function updateStageProgress(agentId, stage, updates = {}) {
+  const supabase = getAdminClient()
+  const allowed = {}
+  if (updates.validation_results !== undefined) allowed.validation_results = updates.validation_results
+  if (updates.test_scores        !== undefined) allowed.test_scores        = updates.test_scores
+  if (updates.notes              !== undefined) allowed.notes              = updates.notes
+  if (Object.keys(allowed).length === 0) {
+    throw new Error('No valid fields to update')
+  }
+  allowed.updated_at = new Date().toISOString()
+
+  // Allow status to be set to In Progress to recover from a stuck state, but
+  // never to Complete/Failed (those are terminal and gated by their own helpers).
+  if (updates.status === 'In Progress') allowed.status = 'In Progress'
+
+  const { data, error } = await supabase
+    .from('training_progress')
+    .update(allowed)
     .eq('agent_id', agentId)
     .eq('stage', stage)
     .select()

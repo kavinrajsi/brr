@@ -49,17 +49,19 @@ export async function PUT(req, { params }) {
   if (!owned) return Response.json({ error: 'Brand not found' }, { status: 404 })
 
   const body = await req.json()
+  // Whitelist fields a user may modify. status / current_stage / user_id /
+  // created_at are server-owned (training-manager / DB defaults) — never accept
+  // them from a client payload to prevent mass-assignment.
+  const update = { updated_at: new Date().toISOString() }
+  if (body.name       !== undefined) update.name       = body.name
+  if (body.short_name !== undefined) update.short_name = body.short_name
+  if (body.notes      !== undefined) update.notes      = body.notes
+
   const { data, error } = await supabase
     .from('brands')
-    .update({
-      name: body.name,
-      short_name: body.short_name,
-      status: body.status,
-      current_stage: body.current_stage,
-      notes: body.notes,
-      updated_at: new Date().toISOString(),
-    })
+    .update(update)
     .eq('id', brandId)
+    .eq('user_id', user.id)
     .select()
     .single()
 

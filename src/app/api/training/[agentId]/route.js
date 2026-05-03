@@ -1,5 +1,5 @@
 import { getUserFromRequest, getAdminClient, dbError } from '@/lib/supabase-server'
-import { completeStage, failStage, advanceAgentStage } from '@/lib/training-manager'
+import { completeStage, failStage } from '@/lib/training-manager'
 
 async function assertAgentOwner(supabase, agentId, userId) {
   const { data: agent } = await supabase
@@ -47,8 +47,11 @@ export async function POST(req, { params }) {
   const { agentId } = await params
   const { action, stage, data: stageData } = await req.json()
 
-  if (!['complete', 'fail', 'advance'].includes(action)) {
-    return Response.json({ error: 'action must be complete, fail, or advance' }, { status: 400 })
+  // Removed `advance` — advancement is a side-effect of completeStage and must
+  // never be triggered directly. Allowing it lets a user jump from stage 1 to 6
+  // without satisfying the state machine in training-manager.js.
+  if (!['complete', 'fail'].includes(action)) {
+    return Response.json({ error: 'action must be complete or fail' }, { status: 400 })
   }
   if (!stage || stage < 1 || stage > 6) {
     return Response.json({ error: 'stage must be between 1 and 6' }, { status: 400 })
@@ -60,8 +63,7 @@ export async function POST(req, { params }) {
 
   let result
   if (action === 'complete') result = await completeStage(agentId, stage, stageData)
-  else if (action === 'fail') result = await failStage(agentId, stage, stageData?.reason)
-  else result = await advanceAgentStage(agentId, stage + 1)
+  else                       result = await failStage(agentId, stage, stageData?.reason)
 
   return Response.json({ message: `Stage ${stage} ${action}d`, result })
 }
