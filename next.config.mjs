@@ -1,5 +1,3 @@
-const isDev = process.env.NODE_ENV === 'development'
-
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   images: {
@@ -7,7 +5,10 @@ const nextConfig = {
     deviceSizes: [640, 750, 828, 1080, 1200, 1920],
     imageSizes: [16, 32, 48, 64, 96, 128, 256, 384],
     minimumCacheTTL: 60,
-    remotePatterns: [{ protocol: 'https', hostname: '**' }],
+    // Empty allowlist — the next/image optimiser will only fetch from the
+    // app's own origin. Previously remotePatterns: [{ hostname: '**' }]
+    // turned the optimiser into an open SSRF / bandwidth proxy.
+    remotePatterns: [],
   },
 
   async headers() {
@@ -15,6 +16,10 @@ const nextConfig = {
       {
         source: '/(.*)',
         headers: [
+          // CSP for app pages is set per-request in src/middleware.js so we
+          // can include a fresh nonce. These static headers cover everything
+          // that doesn't pass through the middleware (API routes, static
+          // assets) — they're cheap and additive.
           { key: 'X-Content-Type-Options', value: 'nosniff' },
           { key: 'X-Frame-Options', value: 'DENY' },
           { key: 'X-XSS-Protection', value: '1; mode=block' },
@@ -24,23 +29,11 @@ const nextConfig = {
             key: 'Strict-Transport-Security',
             value: 'max-age=31536000; includeSubDomains; preload',
           },
-          {
-            key: 'Content-Security-Policy',
-            value: [
-              "default-src 'self'",
-              // unsafe-eval is required by React in dev mode for call stack reconstruction
-              `script-src 'self' 'unsafe-inline'${isDev ? " 'unsafe-eval'" : ''} https://www.googletagmanager.com`,
-              "style-src 'self' 'unsafe-inline'",
-              "img-src 'self' data: https:",
-              "connect-src 'self' https://*.supabase.co https://www.google-analytics.com",
-            ].join('; '),
-          },
         ],
       },
       // Embed widget — must be iframable from arbitrary origins, but the
       // chat endpoint enforces per-token allowed_origin so a bad iframe
-      // host cannot make it talk. X-Frame-Options omitted intentionally
-      // (no value works for "any HTTPS origin"); browsers honour CSP.
+      // host cannot make it talk. Skipped by the middleware matcher.
       {
         source: '/embed/:path*',
         headers: [

@@ -1,3 +1,4 @@
+import { headers } from 'next/headers'
 import { IBM_Plex_Sans } from 'next/font/google'
 import { AuthProvider } from '@/contexts/AuthContext'
 import { OrganizationProvider } from '@/contexts/OrganizationContext'
@@ -14,16 +15,24 @@ export const metadata = {
   description: 'Train AI agents on brand BRR',
 }
 
-export default function RootLayout({ children }) {
+export default async function RootLayout({ children }) {
   const gaId = process.env.NEXT_PUBLIC_GA_ID
+  // Nonce comes from src/middleware.js — applied to inline scripts so we can
+  // drop 'unsafe-inline' from the CSP script-src.
+  const nonce = (await headers()).get('x-nonce') ?? ''
 
   return (
     <html lang="en" className={ibmPlexSans.variable}>
       <head>
         {gaId && (
           <>
-            <script async src={`https://www.googletagmanager.com/gtag/js?id=${gaId}`} />
             <script
+              async
+              nonce={nonce}
+              src={`https://www.googletagmanager.com/gtag/js?id=${gaId}`}
+            />
+            <script
+              nonce={nonce}
               dangerouslySetInnerHTML={{
                 __html: `window.dataLayer=window.dataLayer||[];function gtag(){dataLayer.push(arguments);}gtag('js',new Date());gtag('config','${gaId}',{page_path:window.location.pathname});`,
               }}
