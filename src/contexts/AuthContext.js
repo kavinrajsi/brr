@@ -42,15 +42,12 @@ export function AuthProvider({ children }) {
     }
   }, [])
 
-  // Wrap each credential op so we set isSubmitting around it. useCallback
-  // keeps identities stable so the context value doesn't churn.
-  const withSubmitting = useCallback((fn) => async (...args) => {
-    setIsSubmitting(true)
-    try { return await fn(...args) }
-    finally { setIsSubmitting(false) }
-  }, [])
+  // Each credential op sets isSubmitting around itself. Inlined (rather than
+  // wrapped via a higher-order helper) so ESLint's exhaustive-deps can verify
+  // the dependency lists statically — wrapping confused the rule.
 
-  const signup = useCallback(withSubmitting(async (email, password) => {
+  const signup = useCallback(async (email, password) => {
+    setIsSubmitting(true)
     setError(null)
     try {
       const { data, error } = await supabase.auth.signUp({
@@ -63,10 +60,13 @@ export function AuthProvider({ children }) {
     } catch (err) {
       setError(err.message)
       throw err
+    } finally {
+      setIsSubmitting(false)
     }
-  }), [withSubmitting])
+  }, [])
 
-  const login = useCallback(withSubmitting(async (email, password) => {
+  const login = useCallback(async (email, password) => {
+    setIsSubmitting(true)
     setError(null)
     try {
       const { data, error } = await supabase.auth.signInWithPassword({ email, password })
@@ -75,10 +75,13 @@ export function AuthProvider({ children }) {
     } catch (err) {
       setError(err.message)
       throw err
+    } finally {
+      setIsSubmitting(false)
     }
-  }), [withSubmitting])
+  }, [])
 
-  const forgotPassword = useCallback(withSubmitting(async (email) => {
+  const forgotPassword = useCallback(async (email) => {
+    setIsSubmitting(true)
     setError(null)
     try {
       const { error } = await supabase.auth.resetPasswordForEmail(email, {
@@ -88,10 +91,13 @@ export function AuthProvider({ children }) {
     } catch (err) {
       setError(err.message)
       throw err
+    } finally {
+      setIsSubmitting(false)
     }
-  }), [withSubmitting])
+  }, [])
 
-  const updatePassword = useCallback(withSubmitting(async (newPassword) => {
+  const updatePassword = useCallback(async (newPassword) => {
+    setIsSubmitting(true)
     setError(null)
     try {
       const { error } = await supabase.auth.updateUser({ password: newPassword })
@@ -99,10 +105,13 @@ export function AuthProvider({ children }) {
     } catch (err) {
       setError(err.message)
       throw err
+    } finally {
+      setIsSubmitting(false)
     }
-  }), [withSubmitting])
+  }, [])
 
-  const logout = useCallback(withSubmitting(async () => {
+  const logout = useCallback(async () => {
+    setIsSubmitting(true)
     setError(null)
     try {
       const { error } = await supabase.auth.signOut()
@@ -111,8 +120,10 @@ export function AuthProvider({ children }) {
     } catch (err) {
       setError(err.message)
       throw err
+    } finally {
+      setIsSubmitting(false)
     }
-  }), [withSubmitting])
+  }, [])
 
   // Memoise the context value so consumers don't re-render every time a
   // parent re-renders. Was creating a fresh object literal each render.

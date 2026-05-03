@@ -1,0 +1,41 @@
+version: 2
+updates:
+  # npm: weekly grouped PR for non-major bumps. Major versions get their own
+  # PRs so they can be reviewed individually (next, react, supabase-js etc.).
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+      time: '09:00'
+      timezone: Asia/Kolkata
+    open-pull-requests-limit: 10
+    labels:
+      - dependencies
+    groups:
+      patch-and-minor:
+        update-types:
+          - patch
+          - minor
+        # Keep these out of the grouped PR — we want to review them on their own
+        exclude-patterns:
+          - 'next'
+          - 'react'
+          - 'react-dom'
+          - '@anthropic-ai/sdk'
+          - '@supabase/supabase-js'
+          - 'stripe'
+    ignore:
+      # Hold off on Tailwind 5 / shadcn / lucide majors until they stabilise
+      - dependency-name: 'tailwindcss'
+        update-types: ['version-update:semver-major']
+
+  # GitHub Actions versions
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+    labels:
+      - dependencies
+      - ci
