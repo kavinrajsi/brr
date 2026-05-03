@@ -62,10 +62,14 @@ export async function hasPermission(userId, orgId, permission) {
   return ROLE_PERMISSIONS[role]?.[permission] === true
 }
 
+// orgId may be null for personal-account mutations (a brand or agent owned
+// directly by a user with no organisation). audit_logs.organization_id is
+// nullable in the schema; the personal event is then visible only to that
+// user (see /api/admin/audit which OR's user_id = caller).
 export async function logAuditAction(orgId, userId, action, resource = {}) {
   const supabase = getAdminClient()
   const { error } = await supabase.from('audit_logs').insert([{
-    organization_id: orgId,
+    organization_id: orgId ?? null,
     user_id: userId,
     action,
     resource_type: resource.type ?? null,

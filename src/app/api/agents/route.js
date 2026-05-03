@@ -2,6 +2,7 @@ import { getUserFromRequest, getAdminClient, dbError } from '@/lib/supabase-serv
 import { checkRateLimit } from '@/lib/rate-limiter'
 import { getUserPlanLimits } from '@/lib/stripe'
 import { initializeAgentTraining } from '@/lib/training-manager'
+import { logAuditAction } from '@/lib/permissions'
 
 export async function GET(req) {
   const user = await getUserFromRequest(req)
@@ -80,6 +81,10 @@ export async function POST(req) {
     await supabase.from('agents').delete().eq('id', agent.id)
     return dbError(progressError)
   }
+
+  await logAuditAction(null, user.id, 'agent_created', {
+    type: 'agent', id: agent.id, changes: { name: agent.name, brand_id },
+  })
 
   return Response.json(agent, { status: 201 })
 }

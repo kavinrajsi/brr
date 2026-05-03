@@ -1,6 +1,7 @@
 import { getUserFromRequest, getAdminClient, dbError } from '@/lib/supabase-server'
 import { checkRateLimit } from '@/lib/rate-limiter'
 import { getUserPlanLimits } from '@/lib/stripe'
+import { logAuditAction } from '@/lib/permissions'
 
 export async function GET(req) {
   const user = await getUserFromRequest(req)
@@ -69,5 +70,10 @@ export async function POST(req) {
     .single()
 
   if (error) return dbError(error)
+
+  await logAuditAction(null, user.id, 'brand_created', {
+    type: 'brand', id: data.id, changes: { name: data.name, short_name: data.short_name },
+  })
+
   return Response.json(data, { status: 201 })
 }

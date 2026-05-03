@@ -1,5 +1,6 @@
 import { getUserFromRequest, getAdminClient } from '@/lib/supabase-server'
 import { onBrandMutated } from '@/lib/cache-invalidation'
+import { logAuditAction } from '@/lib/permissions'
 
 // Allowlist of fields a user may modify on a brand. Excludes user_id, created_at,
 // status, current_stage, and any other server-owned columns to prevent mass-assignment.
@@ -70,6 +71,10 @@ export async function POST(req) {
       failed++
     }
   }
+
+  await logAuditAction(null, user.id, 'brands_bulk_updated', {
+    type: 'brand', changes: { total: updates.length, successful, failed, brandIds },
+  })
 
   return Response.json({
     results,

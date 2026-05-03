@@ -1,5 +1,6 @@
 import { getUserFromRequest, getAdminClient, dbError } from '@/lib/supabase-server'
 import { getUserPlanLimits } from '@/lib/stripe'
+import { logAuditAction } from '@/lib/permissions'
 
 export async function POST(req) {
   const user = await getUserFromRequest(req)
@@ -55,6 +56,10 @@ export async function POST(req) {
 
   const { data, error } = await supabase.from('agents').insert(agents).select()
   if (error) return dbError(error)
+
+  await logAuditAction(null, user.id, 'agents_batch_created', {
+    type: 'agent', changes: { count: data.length, agentIds: data.map(a => a.id), brandIds },
+  })
 
   return Response.json({
     message: `Created ${data.length} agents`,

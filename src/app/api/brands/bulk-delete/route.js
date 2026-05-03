@@ -1,5 +1,6 @@
 import { getUserFromRequest, getAdminClient, dbError } from '@/lib/supabase-server'
 import { onBrandMutated } from '@/lib/cache-invalidation'
+import { logAuditAction } from '@/lib/permissions'
 
 export async function POST(req) {
   const user = await getUserFromRequest(req)
@@ -49,5 +50,10 @@ export async function POST(req) {
   if (error) return dbError(error)
 
   brandIds.forEach(id => onBrandMutated(id, user.id))
+
+  await logAuditAction(null, user.id, 'brands_bulk_deleted', {
+    type: 'brand', changes: { count: brandIds.length, brandIds },
+  })
+
   return Response.json({ message: `Deleted ${brandIds.length} brands`, deleted: brandIds.length })
 }

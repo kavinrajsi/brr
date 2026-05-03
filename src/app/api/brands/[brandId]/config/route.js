@@ -1,5 +1,5 @@
 import { getUserFromRequest, getAdminClient, dbError } from '@/lib/supabase-server'
-import { assertBrandOwner } from '@/lib/permissions'
+import { assertBrandOwner, logAuditAction } from '@/lib/permissions'
 import { validateWebhookUrl } from '@/lib/webhook'
 
 export async function GET(req, { params }) {
@@ -66,5 +66,13 @@ export async function PUT(req, { params }) {
         .single()
 
   if (error) return dbError(error)
+
+  await logAuditAction(null, user.id, 'brand_config_updated', {
+    type: 'brand_config', id: brandId,
+    // Log only the keys changed, not their values — config can contain
+    // long-form text and is not safe to mirror into audit_logs.
+    changes: { keys: Object.keys(config ?? {}) },
+  })
+
   return Response.json(data)
 }

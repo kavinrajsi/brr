@@ -1,4 +1,5 @@
 import { getUserFromRequest, getAdminClient, dbError } from '@/lib/supabase-server'
+import { logAuditAction } from '@/lib/permissions'
 
 export async function DELETE(req, { params }) {
   const user = await getUserFromRequest(req)
@@ -20,5 +21,10 @@ export async function DELETE(req, { params }) {
 
   const { error } = await supabase.from('agent_api_keys').delete().eq('id', keyId)
   if (error) return dbError(error)
+
+  await logAuditAction(null, user.id, 'api_key_revoked', {
+    type: 'agent_api_key', id: keyId, changes: { agentId },
+  })
+
   return new Response(null, { status: 204 })
 }

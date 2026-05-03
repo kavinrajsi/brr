@@ -1,6 +1,7 @@
 import { createHash, randomBytes } from 'crypto'
 import { getUserFromRequest, getAdminClient, dbError } from '@/lib/supabase-server'
 import { checkRateLimit } from '@/lib/rate-limiter'
+import { logAuditAction } from '@/lib/permissions'
 
 async function assertAgentOwner(supabase, agentId, userId) {
   const { data } = await supabase
@@ -58,6 +59,13 @@ export async function POST(req, { params }) {
     .single()
 
   if (error) return dbError(error)
+
+  // Audit BEFORE returning the plaintext key. Log only metadata (id, name,
+  // prefix) — never the secret itself.
+  await logAuditAction(null, user.id, 'api_key_created', {
+    type: 'agent_api_key', id: data.id,
+    changes: { agentId, name: data.name, prefix: data.key_prefix },
+  })
 
   // Return the raw key once — it is never stored in plaintext
   return Response.json({ ...data, key: rawKey }, { status: 201 })

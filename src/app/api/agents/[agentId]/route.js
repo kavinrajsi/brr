@@ -1,4 +1,5 @@
 import { getUserFromRequest, getAdminClient, dbError } from '@/lib/supabase-server'
+import { logAuditAction } from '@/lib/permissions'
 
 async function assertAgentOwner(supabase, agentId, userId) {
   const { data } = await supabase
@@ -61,6 +62,11 @@ export async function PUT(req, { params }) {
     .single()
 
   if (error) return dbError(error)
+
+  await logAuditAction(null, user.id, 'agent_updated', {
+    type: 'agent', id: agentId, changes: update,
+  })
+
   return Response.json(data)
 }
 
@@ -79,5 +85,10 @@ export async function DELETE(req, { params }) {
 
   const { error } = await supabase.from('agents').delete().eq('id', agentId)
   if (error) return dbError(error)
+
+  await logAuditAction(null, user.id, 'agent_deleted', {
+    type: 'agent', id: agentId,
+  })
+
   return new Response(null, { status: 204 })
 }

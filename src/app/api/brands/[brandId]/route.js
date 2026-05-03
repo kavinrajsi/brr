@@ -1,6 +1,7 @@
 import { getUserFromRequest, getAdminClient, dbError } from '@/lib/supabase-server'
 import { cacheManager } from '@/lib/cache'
 import { onBrandMutated } from '@/lib/cache-invalidation'
+import { logAuditAction } from '@/lib/permissions'
 
 async function assertBrandOwner(supabase, brandId, userId) {
   const { data, error } = await supabase
@@ -68,6 +69,9 @@ export async function PUT(req, { params }) {
   if (error) return dbError(error)
 
   onBrandMutated(brandId, user.id)
+  await logAuditAction(null, user.id, 'brand_updated', {
+    type: 'brand', id: brandId, changes: update,
+  })
   return Response.json(data)
 }
 
@@ -103,5 +107,8 @@ export async function DELETE(req, { params }) {
   if (error) return dbError(error)
 
   onBrandMutated(brandId, user.id)
+  await logAuditAction(null, user.id, 'brand_deleted', {
+    type: 'brand', id: brandId,
+  })
   return new Response(null, { status: 204 })
 }

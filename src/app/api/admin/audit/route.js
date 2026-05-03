@@ -12,7 +12,9 @@ export async function GET(req) {
 
   const supabase = getAdminClient()
 
-  // Get orgs where user is owner or admin
+  // Visibility rules:
+  //   - Org events:      visible to owners/admins of that org
+  //   - Personal events: visible to the user who performed them (org_id IS NULL)
   const { data: adminOrgs } = await supabase
     .from('organization_members')
     .select('organization_id')
@@ -21,14 +23,18 @@ export async function GET(req) {
 
   const orgIds = (adminOrgs ?? []).map(o => o.organization_id)
 
-  if (orgIds.length === 0) {
-    return Response.json({ logs: [], pagination: { total: 0, page, limit, pages: 0 } })
-  }
+  // Build a single OR predicate covering both org events the user can see
+  // and personal events the user themselves performed.
+  // Postgrest .or() syntax: comma-separated, each clause a column.op.value.
+  const personalClause = `and(organization_id.is.null,user_id.eq.${user.id})`
+  const orFilter = orgIds.length > 0
+    ? `organization_id.in.(${orgIds.join(',')}),${personalClause}`
+    : personalClause
 
   let query = supabase
     .from('audit_logs')
     .select('*', { count: 'exact' })
-    .in('organization_id', orgIds)
+    .or(orFilter)
     .order('created_at', { ascending: false })
     .range(offset, offset + limit - 1)
 

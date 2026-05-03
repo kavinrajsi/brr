@@ -100,5 +100,10 @@ export async function DELETE(req, { params }) {
     .eq('organization_id', orgId)
 
   if (error) return dbError(error)
+
+  await logAuditAction(orgId, user.id, 'member_invite_revoked', {
+    type: 'invite', id: inviteId,
+  })
+
   return new Response(null, { status: 204 })
 }
