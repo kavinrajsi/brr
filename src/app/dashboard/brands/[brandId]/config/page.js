@@ -116,8 +116,15 @@ export default function BrandConfigPage() {
         <Link href={`/dashboard/brands/${brandId}`} className="text-slate-600 hover:text-slate-900 mb-4 inline-block">
           ← Back to Brand
         </Link>
-        <h1 className="text-3xl font-bold text-slate-900">Brand Prism</h1>
-        <p className="text-slate-600 mt-1">Define your brand identity across Kapferer's six facets</p>
+        <div className="flex items-start justify-between">
+          <div>
+            <h1 className="text-3xl font-bold text-slate-900">Brand Prism</h1>
+            <p className="text-slate-600 mt-1">Define your brand identity across Kapferer's six facets</p>
+          </div>
+          <Link href={`/dashboard/brands/${brandId}/prism`}>
+            <Button variant="outline">View Brand Prism →</Button>
+          </Link>
+        </div>
       </div>
 
       {/* Progress bar */}

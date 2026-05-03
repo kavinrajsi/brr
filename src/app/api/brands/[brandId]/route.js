@@ -79,6 +79,24 @@ export async function DELETE(req, { params }) {
   const owned = await assertBrandOwner(supabase, brandId, user.id)
   if (!owned) return Response.json({ error: 'Brand not found' }, { status: 404 })
 
+  // Fetch agent IDs first so we can delete their children
+  const { data: agents } = await supabase
+    .from('agents')
+    .select('id')
+    .eq('brand_id', brandId)
+
+  const agentIds = (agents ?? []).map(a => a.id)
+
+  if (agentIds.length > 0) {
+    await supabase.from('agent_api_keys').delete().in('agent_id', agentIds)
+    await supabase.from('training_progress').delete().in('agent_id', agentIds)
+    await supabase.from('agents').delete().in('id', agentIds)
+  }
+
+  await supabase.from('brand_configs').delete().eq('brand_id', brandId)
+  await supabase.from('brand_knowledge').delete().eq('brand_id', brandId)
+  await supabase.from('test_scenarios').delete().eq('brand_id', brandId)
+
   const { error } = await supabase.from('brands').delete().eq('id', brandId)
   if (error) return dbError(error)
 

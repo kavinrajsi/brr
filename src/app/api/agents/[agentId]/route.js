@@ -74,6 +74,9 @@ export async function DELETE(req, { params }) {
   const owned = await assertAgentOwner(supabase, agentId, user.id)
   if (!owned) return Response.json({ error: 'Agent not found' }, { status: 404 })
 
+  await supabase.from('agent_api_keys').delete().eq('agent_id', agentId)
+  await supabase.from('training_progress').delete().eq('agent_id', agentId)
+
   const { error } = await supabase.from('agents').delete().eq('id', agentId)
   if (error) return dbError(error)
   return new Response(null, { status: 204 })

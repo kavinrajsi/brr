@@ -19,9 +19,8 @@ export function DashboardSidebar() {
 
   return (
     <aside className="w-64 bg-white border-r border-slate-200 h-screen flex flex-col overflow-hidden">
-      <div className="p-6 border-b border-slate-200 shrink-0">
+      <div className="px-6 h-16 border-b border-slate-200 shrink-0 flex items-center">
         <h2 className="text-lg font-bold text-slate-900">BRR AI</h2>
-        <p className="text-xs text-slate-500 mt-1">Training System</p>
       </div>
 
       <nav className="p-4 space-y-1 flex-1 overflow-y-auto">

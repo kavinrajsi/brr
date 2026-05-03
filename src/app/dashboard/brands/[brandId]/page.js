@@ -92,7 +92,6 @@ export default function BrandDetailPage() {
             { href: `/dashboard/brands/${brand.id}/training`, icon: '📚', label: 'Training', desc: 'Run training stages for your agent' },
             { href: `/dashboard/brands/${brand.id}/scenarios`, icon: '📝', label: 'Test Scenarios', desc: 'Simulate customer conversations' },
             { href: `/dashboard/brands/${brand.id}/knowledge`, icon: '📖', label: 'Knowledge Base', desc: 'Upload docs, FAQs, and product info' },
-            { href: `/dashboard/brands/${brand.id}/prism`, icon: '◈', label: 'Brand Prism', desc: 'View full identity prism and export as Markdown' },
           ].map(({ href, icon, label, desc }) => (
             <Link key={label} href={href}>
               <Card className="p-5 hover:shadow-md hover:border-slate-300 transition-all cursor-pointer h-full">

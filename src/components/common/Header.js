@@ -26,10 +26,6 @@ export function DashboardHeader() {
 
         {user && (
           <div className="flex items-center gap-4">
-            <span className="text-sm text-slate-600 hidden sm:inline">
-              {user.email}
-            </span>
-
             <DropdownMenu>
               <DropdownMenuTrigger className="inline-flex items-center justify-center rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-sm font-medium text-slate-900 hover:bg-slate-50 transition-colors outline-none">
                 Account

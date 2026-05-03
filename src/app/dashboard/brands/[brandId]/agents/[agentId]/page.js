@@ -77,10 +77,14 @@ function ApiKeyManager({ agentId }) {
 
   const handleRevoke = async (keyId) => {
     if (!confirm('Revoke this key? Any integration using it will stop working.')) return
-    await apiCall(`/api/agents/${agentId}/keys/${keyId}`, { method: 'DELETE' })
-    setKeys(prev => prev.filter(k => k.id !== keyId))
-    removeKeyFromSession(keyId)
-    if (revealed?.id === keyId) setRevealed(null)
+    try {
+      await apiCall(`/api/agents/${agentId}/keys/${keyId}`, { method: 'DELETE' })
+      setKeys(prev => prev.filter(k => k.id !== keyId))
+      removeKeyFromSession(keyId)
+      if (revealed?.id === keyId) setRevealed(null)
+    } catch (err) {
+      alert('Failed to revoke key: ' + err.message)
+    }
   }
 
   const handleShow = (keyId) => {
@@ -300,16 +304,16 @@ function ScoreBadge({ score }) {
   return <span className={`text-sm font-bold px-2.5 py-0.5 rounded-full border ${color}`}>{score}/10</span>
 }
 
-function EvaluateButton({ agentId, stageNum }) {
-  const [loading, setLoading]   = useState(false)
-  const [result, setResult]     = useState(null)
-  const [error, setError]       = useState('')
-  const [open, setOpen]         = useState(true)
+function StageRow({ stage, href, agentId }) {
+  const [loading, setLoading] = useState(false)
+  const [result, setResult]   = useState(null)
+  const [error, setError]     = useState('')
+  const [open, setOpen]       = useState(true)
 
   const run = async () => {
     setLoading(true); setError(''); setResult(null); setOpen(true)
     try {
-      setResult(await apiCall(`/api/agents/${agentId}/training/${stageNum}/evaluate`, { method: 'POST' }))
+      setResult(await apiCall(`/api/agents/${agentId}/training/${stage.stage}/evaluate`, { method: 'POST' }))
     } catch (err) {
       setError(err.message)
     } finally {
@@ -317,14 +321,35 @@ function EvaluateButton({ agentId, stageNum }) {
     }
   }
 
-  return (
-    <div className="mt-2">
-      <Button size="sm" variant="outline" className="w-full text-xs text-blue-700 border-blue-200 hover:bg-blue-50" onClick={run} disabled={loading}>
+  const evaluateButton = stage.status === 'In Progress' ? (
+    result && !open ? (
+      <Button
+        size="sm"
+        variant="outline"
+        className="shrink-0 text-xs text-slate-600 border-slate-200"
+        onClick={() => setOpen(true)}
+      >
+        Show result
+      </Button>
+    ) : (
+      <Button
+        size="sm"
+        variant="outline"
+        className="shrink-0 text-xs text-blue-700 border-blue-200 hover:bg-blue-50"
+        onClick={run}
+        disabled={loading}
+      >
         {loading ? 'Evaluating…' : 'Evaluate with AI'}
       </Button>
-      {error && <p className="mt-2 text-xs text-red-600 px-1">{error}</p>}
+    )
+  ) : null
+
+  return (
+    <div>
+      <StageCard stage={stage} href={href} evaluateButton={evaluateButton} />
+      {error && <p className="mt-1 text-xs text-red-600 px-1">{error}</p>}
       {result && open && (
-        <div className="mt-3 border border-slate-200 rounded-xl bg-white p-4 space-y-3">
+        <div className="mt-2 border border-slate-200 rounded-xl bg-white p-4 space-y-3">
           <div className="flex items-center justify-between flex-wrap gap-2">
             <div className="flex items-center gap-2">
               <ScoreBadge score={result.score} />
@@ -332,7 +357,9 @@ function EvaluateButton({ agentId, stageNum }) {
                 {result.ready ? 'Ready' : 'Not yet ready'}
               </span>
             </div>
-            <button onClick={() => setOpen(false)} className="text-xs text-slate-400 hover:text-slate-700">Dismiss</button>
+            <button onClick={() => setOpen(false)} className="text-slate-400 hover:text-slate-700" aria-label="Dismiss">
+              <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+            </button>
           </div>
           {result.recommendations?.length > 0 && (
             <ul className="space-y-1.5">
@@ -342,9 +369,6 @@ function EvaluateButton({ agentId, stageNum }) {
             </ul>
           )}
         </div>
-      )}
-      {result && !open && (
-        <button onClick={() => setOpen(true)} className="mt-1 text-xs text-slate-400 hover:text-slate-700 w-full text-center">Show result</button>
       )}
     </div>
   )
@@ -478,22 +502,19 @@ export default function AgentTrainingPage() {
         </p>
       </Card>
 
-      {/* Stage grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+      {/* Stage list */}
+      <div className="space-y-2">
         {stages.map(stage => (
-          <div key={stage.stage}>
-            <StageCard
-              stage={stage}
-              href={
-                stage.status !== 'Pending'
-                  ? `/dashboard/brands/${brandId}/agents/${agentId}/stage/${stage.stage}`
-                  : undefined
-              }
-            />
-            {stage.status === 'In Progress' && (
-              <EvaluateButton agentId={agentId} stageNum={stage.stage} />
-            )}
-          </div>
+          <StageRow
+            key={stage.stage}
+            stage={stage}
+            agentId={agentId}
+            href={
+              stage.status !== 'Pending'
+                ? `/dashboard/brands/${brandId}/agents/${agentId}/stage/${stage.stage}`
+                : undefined
+            }
+          />
         ))}
       </div>
 

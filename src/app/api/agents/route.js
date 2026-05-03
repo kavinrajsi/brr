@@ -1,6 +1,7 @@
 import { getUserFromRequest, getAdminClient, dbError } from '@/lib/supabase-server'
 import { checkRateLimit } from '@/lib/rate-limiter'
 import { getUserPlanLimits } from '@/lib/stripe'
+import { initializeAgentTraining } from '@/lib/training-manager'
 
 export async function GET(req) {
   const user = await getUserFromRequest(req)
@@ -63,16 +64,9 @@ export async function POST(req) {
 
   if (error) return dbError(error)
 
-  // Initialise 6 training_progress rows — stage 1 starts In Progress, rest are Pending
-  const stages = Array.from({ length: 6 }, (_, i) => ({
-    agent_id: agent.id,
-    stage: i + 1,
-    status: i === 0 ? 'In Progress' : 'Pending',
-    validation_results: {},
-    test_scores: {},
-  }))
-  const { error: progressError } = await supabase.from('training_progress').insert(stages)
-  if (progressError) {
+  try {
+    await initializeAgentTraining(agent.id)
+  } catch (progressError) {
     await supabase.from('agents').delete().eq('id', agent.id)
     return dbError(progressError)
   }

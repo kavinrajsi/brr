@@ -1,5 +1,18 @@
 import { getAdminClient } from './supabase-server'
 
+export async function initializeAgentTraining(agentId) {
+  const supabase = getAdminClient()
+  const stages = Array.from({ length: 6 }, (_, i) => ({
+    agent_id: agentId,
+    stage: i + 1,
+    status: i === 0 ? 'In Progress' : 'Pending',
+    validation_results: {},
+    test_scores: {},
+  }))
+  const { error } = await supabase.from('training_progress').insert(stages)
+  if (error) throw error
+}
+
 export async function advanceAgentStage(agentId, newStage) {
   if (newStage < 1 || newStage > 6) throw new Error('Stage must be between 1 and 6')
 

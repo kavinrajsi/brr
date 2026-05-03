@@ -19,7 +19,7 @@ const STATUS_CONFIG = {
   Failed:      { bg: 'bg-red-50 border-red-200',     badge: 'bg-red-100 text-red-700',       label: 'Failed'      },
 }
 
-export function StageCard({ stage, href }) {
+export function StageCard({ stage, href, evaluateButton }) {
   if (!stage) return null
 
   const cfg = STATUS_CONFIG[stage.status] ?? STATUS_CONFIG.Pending
@@ -31,39 +31,36 @@ export function StageCard({ stage, href }) {
     stage.status === 'Failed'      ? 'Retry'    : 'Locked'
 
   return (
-    <div className={`border rounded-xl p-5 flex flex-col gap-3 ${cfg.bg}`}>
-      <div className="flex items-start justify-between">
-        <div>
-          <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">
-            Stage {stage.stage}
+    <div className={`border rounded-xl px-5 py-4 flex items-center gap-4 ${cfg.bg}`}>
+      <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider w-14 shrink-0">
+        Stage {stage.stage}
+      </span>
+
+      <div className="flex-1 min-w-0">
+        <h3 className="text-sm font-bold text-slate-900">
+          {STAGE_NAMES[stage.stage - 1]}
+        </h3>
+        {stage.completed_at && (
+          <p className="text-xs text-slate-400 mt-0.5">
+            Completed {new Date(stage.completed_at).toLocaleDateString()}
           </p>
-          <h3 className="text-base font-bold text-slate-900 mt-0.5">
-            {STAGE_NAMES[stage.stage - 1]}
-          </h3>
-        </div>
-        <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${cfg.badge}`}>
-          {cfg.label}
-        </span>
+        )}
       </div>
 
-      {stage.completed_at && (
-        <p className="text-xs text-slate-500">
-          Completed {new Date(stage.completed_at).toLocaleDateString()}
-        </p>
-      )}
+      <span className={`text-xs font-medium px-2 py-0.5 rounded-full shrink-0 ${cfg.badge}`}>
+        {cfg.label}
+      </span>
+
+      {evaluateButton}
 
       {href && !isPending ? (
-        <Link href={href}>
-          <Button
-            size="sm"
-            variant={stage.status === 'In Progress' ? 'default' : 'outline'}
-            className="w-full"
-          >
+        <Link href={href} className="shrink-0">
+          <Button size="sm" variant={stage.status === 'In Progress' ? 'default' : 'outline'}>
             {buttonLabel}
           </Button>
         </Link>
       ) : (
-        <Button size="sm" variant="outline" className="w-full" disabled>
+        <Button size="sm" variant="outline" disabled className="shrink-0">
           {buttonLabel}
         </Button>
       )}
