@@ -4,6 +4,7 @@ import { useEffect, useState, useCallback } from 'react'
 import { useParams } from 'next/navigation'
 import { useTraining } from '@/hooks/useTraining'
 import { apiCall } from '@/lib/api-client'
+import { isFilled } from '@/lib/brand-config'
 import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
@@ -11,15 +12,6 @@ import { Alert, AlertDescription } from '@/components/ui/alert'
 import Link from 'next/link'
 
 // ─── Stage 1: Onboarding ────────────────────────────────────────────────────
-
-// Brand config fields are JSONB — values can be string, array, object, etc. Treat any non-empty value as "filled".
-function isFilled(v) {
-  if (v == null) return false
-  if (typeof v === 'string') return v.trim().length > 0
-  if (Array.isArray(v)) return v.some(item => isFilled(item))
-  if (typeof v === 'object') return Object.keys(v).length > 0
-  return Boolean(v)
-}
 
 const ONBOARDING_CHECKS = [
   {

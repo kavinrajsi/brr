@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import { useParams } from 'next/navigation'
 import { useBrandConfig } from '@/hooks/useBrandConfig'
+import { isFilled, formatValue } from '@/lib/brand-config'
 import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import Link from 'next/link'
@@ -83,8 +84,7 @@ function buildMarkdown(config) {
     lines.push(`## ${facet.id}. ${facet.facet}`)
     lines.push(`_${facet.subtitle}_\n`)
     for (const { key, label } of facet.fields) {
-      const val = config[key]
-      if (val) lines.push(`**${label}:** ${val}\n`)
+      if (isFilled(config[key])) lines.push(`**${label}:** ${formatValue(config[key])}\n`)
     }
   }
   return lines.join('\n')
@@ -125,7 +125,7 @@ export default function BrandPrismPage() {
     )
   }
 
-  const hasAnyData = FACETS.some(f => f.fields.some(({ key }) => config?.[key]))
+  const hasAnyData = FACETS.some(f => f.fields.some(({ key }) => isFilled(config?.[key])))
 
   return (
     <div>
@@ -160,7 +160,7 @@ export default function BrandPrismPage() {
 
       <div className="space-y-4">
         {FACETS.map(facet => {
-          const filledFields = facet.fields.filter(({ key }) => config?.[key])
+          const filledFields = facet.fields.filter(({ key }) => isFilled(config?.[key]))
           if (!filledFields.length) return null
           return (
             <Card key={facet.id} className="p-6">
@@ -178,7 +178,7 @@ export default function BrandPrismPage() {
                 {filledFields.map(({ key, label }) => (
                   <div key={key}>
                     <dt className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1">{label}</dt>
-                    <dd className="text-sm text-slate-800 whitespace-pre-wrap">{config[key]}</dd>
+                    <dd className="text-sm text-slate-800 whitespace-pre-wrap">{formatValue(config[key])}</dd>
                   </div>
                 ))}
               </dl>

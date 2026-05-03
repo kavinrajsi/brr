@@ -1,5 +1,11 @@
 import { getUserFromRequest, getAdminClient, dbError } from '@/lib/supabase-server'
 import { anthropic, isAnthropicConfigured } from '@/lib/anthropic'
+import { isFilled, formatValue } from '@/lib/brand-config'
+
+// Coerce config field for inline rendering: returns the formatted string or fallback
+const fmt = (v, fallback = 'not defined') => isFilled(v) ? formatValue(v) : fallback
+// Quoted variant — wraps the value in double quotes when present
+const fmtQ = (v) => isFilled(v) ? `"${formatValue(v)}"` : 'MISSING'
 
 async function assertAgentOwner(supabase, agentId, userId) {
   const { data } = await supabase
@@ -30,7 +36,7 @@ function buildStage1Prompt(brandName, config) {
   }
 
   const facetSummary = Object.entries(facets).map(([name, fields]) => {
-    const filled = fields.filter(f => config[f]?.trim?.())
+    const filled = fields.filter(f => isFilled(config[f]))
     return `${name}: ${filled.length}/${fields.length} fields filled (${filled.length === 0 ? 'EMPTY' : filled.length < fields.length ? 'partial' : 'complete'})`
   }).join('\n')
 
@@ -40,12 +46,12 @@ Brand Prism facet completeness:
 ${facetSummary}
 
 Key fields:
-- Tone of voice: ${config.tone ? `"${config.tone}"` : 'MISSING'}
-- Response style: ${config.response_style ? `"${config.response_style}"` : 'MISSING'}
-- Brand promise: ${config.promise ? `"${config.promise}"` : 'MISSING'}
-- Core values: ${config.key_values ? `"${config.key_values}"` : 'MISSING'}
-- Prohibited topics: ${config.prohibited_topics ? `"${config.prohibited_topics}"` : 'MISSING'}
-- Escalation triggers: ${config.escalation_triggers ? `"${config.escalation_triggers}"` : 'MISSING'}
+- Tone of voice: ${fmtQ(config.tone)}
+- Response style: ${fmtQ(config.response_style)}
+- Brand promise: ${fmtQ(config.promise)}
+- Core values: ${fmtQ(config.key_values)}
+- Prohibited topics: ${fmtQ(config.prohibited_topics)}
+- Escalation triggers: ${fmtQ(config.escalation_triggers)}
 
 Evaluate:
 1. Are all 6 Brand Prism facets meaningfully completed?
@@ -89,8 +95,8 @@ ${setCounts}
 Knowledge base documents:
 ${docList}
 
-Brand tone: ${config.tone || 'not defined'}
-Target audience: ${config.target_audience || 'not defined'}
+Brand tone: ${fmt(config.tone)}
+Target audience: ${fmt(config.target_audience)}
 
 Evaluate:
 1. Is the agent on track to meet the 100% pass threshold? ${pct === 100 ? 'Currently passing.' : `Currently ${pct}% — needs ${25 - passed} more passes.`}
@@ -124,9 +130,9 @@ ${weekSummary('Week 1', w1)}
 ${weekSummary('Week 2', w2)}
 
 Brand voice reference:
-- Tone: ${config.tone || 'not defined'}
-- Prohibited topics: ${config.prohibited_topics || 'not defined'}
-- Escalation triggers: ${config.escalation_triggers || 'not defined'}
+- Tone: ${fmt(config.tone)}
+- Prohibited topics: ${fmt(config.prohibited_topics)}
+- Escalation triggers: ${fmt(config.escalation_triggers)}
 
 Evaluate:
 1. Have both probation weeks been properly reviewed and passed?
@@ -161,11 +167,11 @@ All 3 certification tests must pass.
 ${testSummary}
 
 Brand voice reference:
-- Tone: ${config.tone || 'not defined'}
-- Response style: ${config.response_style || 'not defined'}
-- Brand promise: ${config.promise || 'not defined'}
-- Core values: ${config.key_values || 'not defined'}
-- Prohibited topics: ${config.prohibited_topics || 'not defined'}
+- Tone: ${fmt(config.tone)}
+- Response style: ${fmt(config.response_style)}
+- Brand promise: ${fmt(config.promise)}
+- Core values: ${fmt(config.key_values)}
+- Prohibited topics: ${fmt(config.prohibited_topics)}
 
 Evaluate:
 1. Do the agent outputs genuinely reflect the brand's tone, values, and promise?
@@ -200,9 +206,9 @@ Monthly review notes:
 ${validationResults?.monthly_review?.trim() ? `"${validationResults.monthly_review.trim()}"` : 'Not written yet'}
 
 Brand guardrails to monitor:
-- Prohibited topics: ${config.prohibited_topics || 'not defined'}
-- Escalation triggers: ${config.escalation_triggers || 'not defined'}
-- Tone: ${config.tone || 'not defined'}
+- Prohibited topics: ${fmt(config.prohibited_topics)}
+- Escalation triggers: ${fmt(config.escalation_triggers)}
+- Tone: ${fmt(config.tone)}
 
 Evaluate:
 1. Is the deployment date recorded?
@@ -233,9 +239,9 @@ Re-training notes:
 ${validationResults?.retraining_notes?.trim() ? `"${validationResults.retraining_notes.trim()}"` : 'Not written yet'}
 
 Current brand config summary:
-- Tone: ${config.tone || 'not defined'}
-- Brand promise: ${config.promise || 'not defined'}
-- Core values: ${config.key_values || 'not defined'}
+- Tone: ${fmt(config.tone)}
+- Brand promise: ${fmt(config.promise)}
+- Core values: ${fmt(config.key_values)}
 
 Evaluate:
 1. Are BRR updates being logged with enough detail (version, date, what changed and why)?

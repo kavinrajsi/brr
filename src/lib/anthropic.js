@@ -1,4 +1,5 @@
 import Anthropic from '@anthropic-ai/sdk'
+import { isFilled, formatValue } from '@/lib/brand-config'
 
 export const anthropic = process.env.ANTHROPIC_API_KEY
   ? new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
@@ -8,11 +9,21 @@ export function isAnthropicConfigured() {
   return Boolean(process.env.ANTHROPIC_API_KEY)
 }
 
-// Split a comma-separated config field into a trimmed array, or return null.
+// Normalise a config field to a list of trimmed strings, or null if empty.
+// Accepts both arrays (DB-native JSONB) and comma-separated strings.
 function list(value) {
+  if (Array.isArray(value)) {
+    const items = value.map(v => String(v).trim()).filter(Boolean)
+    return items.length ? items : null
+  }
   if (!value) return null
   const items = String(value).split(',').map(s => s.trim()).filter(Boolean)
   return items.length ? items : null
+}
+
+// Add a labelled line if the value is filled (handles arrays and objects).
+function addLine(lines, prefix, value) {
+  if (isFilled(value)) lines.push(`${prefix}${formatValue(value)}`)
 }
 
 export function buildBrandSystemPrompt(brandName, config = {}) {
@@ -22,36 +33,29 @@ export function buildBrandSystemPrompt(brandName, config = {}) {
   ]
 
   // ── Physique ──────────────────────────────────────────────────────────────
-  if (config.tagline)
-    lines.push('', `Brand tagline: "${config.tagline}"`)
-  if (config.physique)
-    lines.push(`Visual identity: ${config.physique}`)
-  if (config.signature_products)
-    lines.push(`Signature products/services: ${config.signature_products}`)
+  if (isFilled(config.tagline))
+    lines.push('', `Brand tagline: "${formatValue(config.tagline)}"`)
+  addLine(lines, 'Visual identity: ', config.physique)
+  addLine(lines, 'Signature products/services: ', config.signature_products)
 
   // ── Personality ───────────────────────────────────────────────────────────
   const traits = list(config.personality_traits)
   if (traits)
     lines.push('', `Brand character: ${traits.join(', ')}`)
-  if (config.tone)
-    lines.push(`Tone of voice: ${config.tone}`)
-  if (config.response_style)
-    lines.push(`Response style: ${config.response_style}`)
-  if (config.promise)
-    lines.push(`Brand promise: ${config.promise}`)
+  addLine(lines, 'Tone of voice: ', config.tone)
+  addLine(lines, 'Response style: ', config.response_style)
+  addLine(lines, 'Brand promise: ', config.promise)
 
   // ── Culture ───────────────────────────────────────────────────────────────
   const values = list(config.key_values)
   if (values)
     lines.push('', `Core values: ${values.join(', ')}`)
-  if (config.culture_beliefs)
-    lines.push(`What we stand for: ${config.culture_beliefs}`)
-  if (config.culture_origin)
-    lines.push(`Brand origin: ${config.culture_origin}`)
+  addLine(lines, 'What we stand for: ', config.culture_beliefs)
+  addLine(lines, 'Brand origin: ', config.culture_origin)
 
   // ── Relationship ──────────────────────────────────────────────────────────
-  if (config.relationship_type)
-    lines.push('', `Your relationship with the customer: act as their ${config.relationship_type}`)
+  if (isFilled(config.relationship_type))
+    lines.push('', `Your relationship with the customer: act as their ${formatValue(config.relationship_type)}`)
 
   const prohibited = list(config.prohibited_topics)
   if (prohibited) {
@@ -65,22 +69,19 @@ export function buildBrandSystemPrompt(brandName, config = {}) {
   }
 
   // ── Reflection ────────────────────────────────────────────────────────────
-  if (config.target_audience)
-    lines.push('', `You are speaking to: ${config.target_audience}`)
-  if (config.reflection_archetype)
-    lines.push(`Customer archetype: ${config.reflection_archetype}`)
-  if (config.customer_values)
-    lines.push(`What they care about: ${config.customer_values}`)
+  if (isFilled(config.target_audience))
+    lines.push('', `You are speaking to: ${formatValue(config.target_audience)}`)
+  addLine(lines, 'Customer archetype: ', config.reflection_archetype)
+  addLine(lines, 'What they care about: ', config.customer_values)
 
   // ── Self-image ────────────────────────────────────────────────────────────
-  if (config.selfimage_feeling)
-    lines.push('', `When customers interact with ${brandName} they should feel: ${config.selfimage_feeling}`)
-  if (config.selfimage_aspiration)
-    lines.push(`Help them become: ${config.selfimage_aspiration}`)
+  if (isFilled(config.selfimage_feeling))
+    lines.push('', `When customers interact with ${brandName} they should feel: ${formatValue(config.selfimage_feeling)}`)
+  addLine(lines, 'Help them become: ', config.selfimage_aspiration)
 
   // ── Final guidelines ──────────────────────────────────────────────────────
-  if (config.response_guidelines)
-    lines.push('', config.response_guidelines)
+  if (isFilled(config.response_guidelines))
+    lines.push('', formatValue(config.response_guidelines))
 
   lines.push('', 'Keep responses concise, helpful, and always on-brand.')
 

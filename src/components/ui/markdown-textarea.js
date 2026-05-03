@@ -3,10 +3,12 @@
 import { useState } from 'react'
 import { Textarea } from '@/components/ui/textarea'
 import { MarkdownView } from '@/components/ui/markdown-view'
+import { formatValue } from '@/lib/brand-config'
 
 export function MarkdownTextarea({ value, onChange, placeholder, rows = 3, className = '', minHeight }) {
   const [mode, setMode] = useState('edit')
-  const hasContent = value && value.trim().length > 0
+  const stringValue = formatValue(value)
+  const hasContent = stringValue.trim().length > 0
 
   // Match the textarea's vertical footprint when previewing so the layout doesn't jump
   const previewMinHeight = minHeight ?? `${Math.max(rows, 3) * 1.5 + 1.5}rem`
@@ -46,7 +48,7 @@ export function MarkdownTextarea({ value, onChange, placeholder, rows = 3, class
 
       {mode === 'edit' ? (
         <Textarea
-          value={value ?? ''}
+          value={stringValue}
           onChange={onChange}
           placeholder={placeholder}
           rows={rows}
@@ -55,7 +57,7 @@ export function MarkdownTextarea({ value, onChange, placeholder, rows = 3, class
       ) : (
         <div className="p-3 overflow-auto" style={{ minHeight: previewMinHeight }}>
           {hasContent
-            ? <MarkdownView>{value}</MarkdownView>
+            ? <MarkdownView>{stringValue}</MarkdownView>
             : <p className="text-xs text-slate-400 italic">Nothing to preview</p>
           }
         </div>

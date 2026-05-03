@@ -1,5 +1,8 @@
 import { getUserFromRequest, getAdminClient, dbError } from '@/lib/supabase-server'
 import { anthropic, isAnthropicConfigured } from '@/lib/anthropic'
+import { isFilled, formatValue } from '@/lib/brand-config'
+
+const fmt = (v, fallback = 'not defined') => isFilled(v) ? formatValue(v) : fallback
 
 async function assertAgentOwner(supabase, agentId, userId) {
   const { data } = await supabase
@@ -43,7 +46,7 @@ function buildStage1Fix(brandName, config, recommendations = []) {
   ]
 
   const fieldSummary = KEY_FIELDS.map(({ field, label }) => {
-    const raw = config[field]?.trim?.() ?? ''
+    const raw = isFilled(config[field]) ? formatValue(config[field]).trim() : ''
     const val = raw.length > 200 ? raw.slice(0, 200) + '…' : raw
     return `  ${label} (${field}): ${val ? `"${val}"` : 'EMPTY'}`
   }).join('\n')
@@ -106,9 +109,9 @@ function buildStage2Fix(brandName, config, testScores, scenarios, recommendation
     return `You are evaluating a single test scenario for brand AI agent "${brandName}".
 
 Brand context:
-- Tone: ${config.tone || 'not defined'}
-- Target audience: ${config.target_audience || 'not defined'}
-- Prohibited topics: ${config.prohibited_topics || 'not defined'}
+- Tone: ${fmt(config.tone)}
+- Target audience: ${fmt(config.target_audience)}
+- Prohibited topics: ${fmt(config.prohibited_topics)}
 
 Scenario ${scenarioKey}: ${scenario?.input_prompt ? `"${scenario.input_prompt}"` : '(no prompt added yet)'}${criteria}${goodEx}${badEx}
 Current score: ${currentScore || 'not yet scored'}
@@ -150,9 +153,9 @@ Respond ONLY with JSON, replacing <YOUR_DECISION> with your chosen value (litera
 
   return `You are evaluating test scenarios for brand AI agent "${brandName}".
 ${evalSection}
-Brand tone: ${config.tone || 'not defined'}
-Target audience: ${config.target_audience || 'not defined'}
-Prohibited topics: ${config.prohibited_topics || 'not defined'}
+Brand tone: ${fmt(config.tone)}
+Target audience: ${fmt(config.target_audience)}
+Prohibited topics: ${fmt(config.prohibited_topics)}
 
 The following scenarios have not been scored yet. For each one, decide pass or fail:
 - pass — straightforward for a well-configured agent matching this brand
@@ -189,10 +192,10 @@ function buildStage3Fix(brandName, config, validationResults, recommendations = 
   return `You are writing probation review notes for brand AI agent "${brandName}".
 ${evalSection}
 Brand voice:
-- Tone: ${config.tone || 'not defined'}
-- Prohibited topics: ${config.prohibited_topics || 'not defined'}
-- Escalation triggers: ${config.escalation_triggers || 'not defined'}
-- Target audience: ${config.target_audience || 'not defined'}
+- Tone: ${fmt(config.tone)}
+- Prohibited topics: ${fmt(config.prohibited_topics)}
+- Escalation triggers: ${fmt(config.escalation_triggers)}
+- Target audience: ${fmt(config.target_audience)}
 
 Current week 1 status: ${w1.passed === true ? 'passed' : w1.passed === false ? 'failed' : 'not reviewed'}
 Current week 1 notes: ${w1.notes?.trim() || 'empty'}
@@ -239,12 +242,12 @@ function buildStage4Fix(brandName, config, validationResults, recommendations = 
   return `You are generating sample certification test outputs for brand AI agent "${brandName}".
 ${evalSection}
 Brand configuration:
-- Tone: ${config.tone || 'not defined'}
-- Response style: ${config.response_style || 'not defined'}
-- Brand promise: ${config.promise || 'not defined'}
-- Core values: ${config.key_values || 'not defined'}
-- Prohibited topics: ${config.prohibited_topics || 'not defined'}
-- Target audience: ${config.target_audience || 'not defined'}
+- Tone: ${fmt(config.tone)}
+- Response style: ${fmt(config.response_style)}
+- Brand promise: ${fmt(config.promise)}
+- Core values: ${fmt(config.key_values)}
+- Prohibited topics: ${fmt(config.prohibited_topics)}
+- Target audience: ${fmt(config.target_audience)}
 
 Generate realistic agent outputs for the following missing certification tests.
 The outputs should genuinely reflect the brand voice and show mastery of the brand guidelines.
@@ -279,9 +282,9 @@ function buildStage5Fix(brandName, config, validationResults, recommendations = 
   return `You are generating a spot-check entry for deployed brand AI agent "${brandName}".
 ${evalSection}
 Brand guardrails:
-- Tone: ${config.tone || 'not defined'}
-- Prohibited topics: ${config.prohibited_topics || 'not defined'}
-- Escalation triggers: ${config.escalation_triggers || 'not defined'}
+- Tone: ${fmt(config.tone)}
+- Prohibited topics: ${fmt(config.prohibited_topics)}
+- Escalation triggers: ${fmt(config.escalation_triggers)}
 
 Current spot checks logged: ${(validationResults?.spot_checks ?? []).length}
 Current monthly review: ${validationResults?.monthly_review?.trim() || 'not written'}
@@ -324,9 +327,9 @@ function buildStage6Fix(brandName, config, validationResults, recommendations = 
 ${evalSection}
 
 Current brand configuration:
-- Tone: ${config.tone || 'not defined'}
-- Core values: ${config.key_values || 'not defined'}
-- Brand promise: ${config.promise || 'not defined'}
+- Tone: ${fmt(config.tone)}
+- Core values: ${fmt(config.key_values)}
+- Brand promise: ${fmt(config.promise)}
 
 Existing BRR updates logged: ${existingUpdates.length}
 ${existingUpdates.map((u, i) => `  v${u.version} (${u.date}): ${u.description}`).join('\n') || '  None'}
