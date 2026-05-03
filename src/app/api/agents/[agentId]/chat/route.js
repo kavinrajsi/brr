@@ -32,6 +32,7 @@ export async function POST(req, { params }) {
   const supabase = getAdminClient()
 
   let authorized = false
+  let isOwnerSession = false
 
   const authHeader = req.headers.get('authorization') ?? ''
   if (authHeader.startsWith('Bearer brr_live_')) {
@@ -48,6 +49,7 @@ export async function POST(req, { params }) {
         .eq('brands.user_id', user.id)
         .single()
       authorized = Boolean(data)
+      isOwnerSession = authorized
     }
   }
 
@@ -68,7 +70,8 @@ export async function POST(req, { params }) {
     .single()
 
   if (!agent) return Response.json({ error: 'Agent not found' }, { status: 404 })
-  if (agent.status !== 'Deployed' && agent.status !== 'Certified') {
+  // Owners can test their own agent during training (Stages 2–4); external API keys still require Deployed/Certified
+  if (!isOwnerSession && agent.status !== 'Deployed' && agent.status !== 'Certified') {
     return Response.json({ error: 'Agent is not yet deployed' }, { status: 403 })
   }
 
@@ -124,7 +127,6 @@ export async function POST(req, { params }) {
           max_tokens: 512,
           system: [buildCachedSystemBlock(systemPrompt)],
           messages,
-          betas: ['prompt-caching-2024-07-31'],
         })
 
         for await (const event of sdkStream) {
