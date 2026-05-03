@@ -77,7 +77,7 @@ function buildStage2Prompt(brandName, config, testScores, scenarios, knowledgeDo
 
   return `You are evaluating Stage 2 (Supervised Training) for "${brandName}".
 
-Test scenario results (need 20/25 = 80% to pass):
+Test scenario results (need 25/25 = 100% to pass):
 - Passed: ${passed}/${total} (${pct}%)
 - Failed: ${failed}
 - Not yet scored: ${unscored}
@@ -92,7 +92,7 @@ Brand tone: ${config.tone || 'not defined'}
 Target audience: ${config.target_audience || 'not defined'}
 
 Evaluate:
-1. Is the agent on track to meet the 80% pass threshold? ${pct >= 80 ? 'Currently passing.' : `Currently ${pct}% — needs ${20 - passed} more passes.`}
+1. Is the agent on track to meet the 100% pass threshold? ${pct === 100 ? 'Currently passing.' : `Currently ${pct}% — needs ${25 - passed} more passes.`}
 2. Which test sets are weakest and why?
 3. Is the knowledge base sufficient to support the scenarios being tested?
 4. What specific areas need improvement before advancing?

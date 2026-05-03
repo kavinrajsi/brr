@@ -162,15 +162,15 @@ function Stage2({ scores, onChange, scenarios, brandId, agentId }) {
             .
           </li>
           <li>Return here and mark each scenario Pass or Fail based on the response.</li>
-          <li>Score 20/25 (80%) to advance to Stage 3.</li>
+          <li>Score 25/25 (100%) to advance to Stage 3.</li>
         </ol>
       </div>
 
       {/* Score bar */}
       <div className="flex items-center justify-between p-4 bg-slate-50 rounded-lg">
         <p className="text-sm font-semibold text-slate-700">Score</p>
-        <p className={`text-lg font-bold ${pct >= 80 ? 'text-green-600' : 'text-slate-900'}`}>
-          {passed}/25 ({pct}%) {pct >= 80 ? '✓ Pass' : ''}
+        <p className={`text-lg font-bold ${pct === 100 ? 'text-green-600' : 'text-slate-900'}`}>
+          {passed}/25 ({pct}%) {pct === 100 ? '✓ Pass' : ''}
         </p>
       </div>
 
@@ -744,7 +744,7 @@ function AiFixPanel({ fixResult, applying, onApply, onDismiss }) {
 
 function canComplete(num, results, scores) {
   if (num === 1) return ONBOARDING_CHECKS.every(c => results[c.id])
-  if (num === 2) return Object.values(scores ?? {}).filter(v => v === 'pass').length >= 20
+  if (num === 2) return Object.values(scores ?? {}).filter(v => v === 'pass').length >= 25
   if (num === 3) return !!(results.week1?.passed && results.week2?.passed)
   if (num === 4) return !!(results.test1?.passed && results.test2?.passed && results.test3?.passed)
   if (num === 5) return !!results.deployed_date
@@ -1044,7 +1044,7 @@ export default function StagePage() {
       {num === 2 && !isComplete && (
         <Card className="p-4 bg-blue-50 border-blue-200">
           <p className="text-xs text-blue-800">
-            Need 20/25 (80%) to pass.
+            Need 25/25 (100%) to pass.
             {scenarios.length === 0 && ' Add scenario prompts from Brand → Scenarios to see them here.'}
           </p>
         </Card>

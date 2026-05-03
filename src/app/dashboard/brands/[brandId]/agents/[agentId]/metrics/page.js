@@ -42,13 +42,13 @@ function Stage2Breakdown({ stages }) {
             <div key={ts.set}>
               <div className="flex justify-between text-sm mb-1">
                 <span className="text-slate-700">Set {ts.set}: {ts.title}</span>
-                <span className={`font-semibold ${pct === 100 ? 'text-green-600' : pct >= 80 ? 'text-blue-600' : 'text-red-600'}`}>
+                <span className={`font-semibold ${pct === 100 ? 'text-green-600' : pct > 0 ? 'text-blue-600' : 'text-red-600'}`}>
                   {passed}/{ts.count}
                 </span>
               </div>
               <div className="h-2 bg-slate-100 rounded-full overflow-hidden">
                 <div
-                  className={`h-full rounded-full ${pct >= 80 ? 'bg-green-500' : 'bg-red-400'}`}
+                  className={`h-full rounded-full ${pct === 100 ? 'bg-green-500' : 'bg-blue-400'}`}
                   style={{ width: `${pct}%` }}
                 />
               </div>
@@ -123,7 +123,7 @@ export default function AgentMetricsPage() {
         </Card>
         <Card className="p-5">
           <p className="text-xs text-slate-500 font-medium uppercase tracking-wider">Test Score</p>
-          <p className={`text-3xl font-bold mt-1 ${stage2Pct >= 80 ? 'text-green-600' : stage2Pct > 0 ? 'text-yellow-600' : 'text-slate-400'}`}>
+          <p className={`text-3xl font-bold mt-1 ${stage2Pct === 100 ? 'text-green-600' : stage2Pct > 0 ? 'text-yellow-600' : 'text-slate-400'}`}>
             {stage2Pct > 0 ? `${stage2Pct}%` : '—'}
           </p>
           <p className="text-xs text-slate-500 mt-1">{stage2Passed > 0 ? `${stage2Passed}/25 passed` : 'Stage 2 not started'}</p>
