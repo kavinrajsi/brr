@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useCallback } from 'react'
 import { useParams } from 'next/navigation'
 import { useTraining } from '@/hooks/useTraining'
 import { apiCall } from '@/lib/api-client'
@@ -123,18 +123,66 @@ const TEST_SETS = [
   { set: 'E', title: 'Real Client Scenarios',   count: 5 },
 ]
 
-function Stage2({ scores, onChange, scenarios, brandId, agentId }) {
-  const passed = TEST_SETS.reduce((acc, ts) => {
-    for (let i = 1; i <= ts.count; i++) {
-      if (scores[`${ts.set}${i}`] === 'pass') acc++
+function Stage2({ scores, onChange, scenarios, brandId, agentId, onSaveScores }) {
+  const [fixing, setFixing] = useState({})
+  const [fixSuggestions, setFixSuggestions] = useState({})
+  const [saveStates, setSaveStates] = useState({}) // { [key]: 'saving' | 'saved' | error_message }
+
+  // Derive set sizes from actual DB scenarios — fall back to defaults so empty Stage 2 still shows structure
+  const scenarioMap = {}
+  scenarios.forEach(s => { scenarioMap[`${s.test_set}${s.scenario_number}`] = s })
+
+  const setCounts = {}
+  for (const ts of TEST_SETS) {
+    const dbCount = scenarios.filter(s => s.test_set === ts.set).length
+    setCounts[ts.set] = dbCount > 0 ? dbCount : ts.count
+  }
+  const totalScenarios = Object.values(setCounts).reduce((a, b) => a + b, 0)
+
+  const passed = Object.entries(setCounts).reduce((acc, [set, count]) => {
+    for (let i = 1; i <= count; i++) {
+      if (scores[`${set}${i}`] === 'pass') acc++
     }
     return acc
   }, 0)
-  const pct = Math.round((passed / 25) * 100)
+  const pct = totalScenarios > 0 ? Math.round((passed / totalScenarios) * 100) : 0
   const hasScenarios = scenarios.length > 0
 
-  const scenarioMap = {}
-  scenarios.forEach(s => { scenarioMap[`${s.test_set}${s.scenario_number}`] = s })
+  const handleScenarioFix = async (key) => {
+    setFixing(prev => ({ ...prev, [key]: true }))
+    setSaveStates(prev => ({ ...prev, [key]: null }))
+    try {
+      const res = await apiCall(`/api/agents/${agentId}/training/2/fix`, {
+        method: 'POST',
+        body: JSON.stringify({ scenario: key }),
+      })
+      if (res.error) {
+        setSaveStates(prev => ({ ...prev, [key]: res.error }))
+        return
+      }
+      setFixSuggestions(prev => ({ ...prev, [key]: res }))
+    } catch (err) {
+      setSaveStates(prev => ({ ...prev, [key]: err?.message || 'AI fix failed' }))
+    } finally {
+      setFixing(prev => ({ ...prev, [key]: false }))
+    }
+  }
+
+  const applyScenarioFix = async (key, res) => {
+    const score = res.patch?.test_scores?.[key]
+    if (!score) return
+    const updated = { ...scores, [key]: score }
+    onChange(updated)
+    setFixSuggestions(prev => ({ ...prev, [key]: null }))
+    setSaveStates(prev => ({ ...prev, [key]: 'saving' }))
+    try {
+      await onSaveScores?.(updated)
+      setSaveStates(prev => ({ ...prev, [key]: 'saved' }))
+      setTimeout(() => setSaveStates(prev => ({ ...prev, [key]: null })), 3000)
+    } catch (err) {
+      setSaveStates(prev => ({ ...prev, [key]: err?.message || 'Save failed' }))
+    }
+  }
 
   return (
     <div className="space-y-6">
@@ -157,15 +205,15 @@ function Stage2({ scores, onChange, scenarios, brandId, agentId }) {
             .
           </li>
           <li>Return here and mark each scenario Pass or Fail based on the response.</li>
-          <li>Score 25/25 (100%) to advance to Stage 3.</li>
+          <li>Score {totalScenarios}/{totalScenarios} (100%) to advance to Stage 3.</li>
         </ol>
       </div>
 
       {/* Score bar */}
       <div className="flex items-center justify-between mt-4 p-4 bg-slate-50 rounded-lg">
         <p className="text-sm font-semibold text-slate-700">Score</p>
-        <p className={`text-lg font-bold ${pct === 100 ? 'text-green-600' : 'text-slate-900'}`}>
-          {passed}/25 ({pct}%) {pct === 100 ? '✓ Pass' : ''}
+        <p className={`text-lg font-bold ${pct === 100 && totalScenarios > 0 ? 'text-green-600' : 'text-slate-900'}`}>
+          {passed}/{totalScenarios} ({pct}%) {pct === 100 && totalScenarios > 0 ? '✓ Pass' : ''}
         </p>
       </div>
 
@@ -185,44 +233,133 @@ function Stage2({ scores, onChange, scenarios, brandId, agentId }) {
             Set {ts.set}: {ts.title}
           </h3>
           <div className="space-y-2">
-            {Array.from({ length: ts.count }, (_, i) => {
+            {Array.from({ length: setCounts[ts.set] }, (_, i) => {
               const key = `${ts.set}${i + 1}`
               const val = scores[key]
               const scenario = scenarioMap[key]
+              const suggestion = fixSuggestions[key]
+              const suggestedScore = suggestion?.patch?.test_scores?.[key]
               return (
                 <div key={key} className="border border-slate-200 rounded-lg overflow-hidden">
-                  <div className="flex items-center justify-between px-4 py-3 bg-white">
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium text-slate-700">Scenario {key}</p>
-                      {scenario?.input_prompt
-                        ? <p className="text-xs text-slate-500 mt-0.5">{scenario.input_prompt}</p>
-                        : <p className="text-xs text-slate-300 mt-0.5 italic">No prompt added yet</p>
-                      }
+                  <div className="flex items-start justify-between px-4 py-3 bg-white gap-4">
+                    <div className="flex-1 min-w-0 space-y-2">
+                      <p className="text-sm font-semibold text-slate-800">Scenario {key}</p>
+
+                      <div>
+                        <p className="text-xs font-medium text-slate-500 mb-0.5">Input Prompt</p>
+                        {scenario?.input_prompt
+                          ? <p className="text-xs text-slate-700">{scenario.input_prompt}</p>
+                          : <p className="text-xs text-slate-300 italic">No prompt added yet</p>
+                        }
+                      </div>
+
+                      {(scenario?.good_example || scenario?.bad_example) && (
+                        <div className="grid grid-cols-2 gap-3">
+                          {scenario.good_example && (
+                            <div className="bg-green-50 border border-green-100 rounded p-2">
+                              <p className="text-xs font-medium text-green-700 mb-0.5">Good Example</p>
+                              <p className="text-xs text-green-800">{scenario.good_example}</p>
+                            </div>
+                          )}
+                          {scenario.bad_example && (
+                            <div className="bg-red-50 border border-red-100 rounded p-2">
+                              <p className="text-xs font-medium text-red-700 mb-0.5">Bad Example</p>
+                              <p className="text-xs text-red-800">{scenario.bad_example}</p>
+                            </div>
+                          )}
+                        </div>
+                      )}
+
+                      {scenario?.evaluation_criteria && (
+                        <div>
+                          <p className="text-xs font-medium text-slate-500 mb-0.5">Evaluation Criteria</p>
+                          {typeof scenario.evaluation_criteria === 'string'
+                            ? <p className="text-xs text-slate-600">{scenario.evaluation_criteria}</p>
+                            : Array.isArray(scenario.evaluation_criteria)
+                              ? <ul className="text-xs text-slate-600 space-y-0.5">
+                                  {scenario.evaluation_criteria.map((c, i) => <li key={i}>• {String(c)}</li>)}
+                                </ul>
+                              : <ul className="text-xs text-slate-600 space-y-0.5">
+                                  {Object.entries(scenario.evaluation_criteria).map(([k, v]) => (
+                                    <li key={k}><span className="font-medium">{k}:</span> {String(v)}</li>
+                                  ))}
+                                </ul>
+                          }
+                        </div>
+                      )}
                     </div>
-                    <div className="flex gap-2 ml-4 shrink-0">
-                      {['pass', 'fail'].map(v => (
+
+                    <div className="flex flex-col items-end gap-2 shrink-0">
+                      <div className="flex gap-2">
                         <button
-                          key={v}
-                          onClick={() => onChange({ ...scores, [key]: val === v ? undefined : v })}
-                          className={[
-                            'px-3 py-1 rounded text-xs font-medium transition-colors',
-                            val === v && v === 'pass' ? 'bg-green-600 text-white' :
-                            val === v && v === 'fail' ? 'bg-red-600 text-white' :
-                            'bg-slate-100 text-slate-600 hover:bg-slate-200',
-                          ].join(' ')}
+                          onClick={() => handleScenarioFix(key)}
+                          disabled={fixing[key]}
+                          title="Get AI suggestion"
+                          className="w-7 h-7 flex items-center justify-center rounded bg-violet-50 border border-violet-200 text-violet-600 hover:bg-violet-100 disabled:opacity-50"
                         >
-                          {v === 'pass' ? 'Pass' : 'Fail'}
+                          {fixing[key]
+                            ? <svg className="w-3.5 h-3.5 animate-spin" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg>
+                            : <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>
+                          }
                         </button>
-                      ))}
+                        {['pass', 'fail'].map(v => (
+                          <button
+                            key={v}
+                            onClick={() => onChange({ ...scores, [key]: val === v ? undefined : v })}
+                            className={[
+                              'px-3 py-1 rounded text-xs font-medium transition-colors',
+                              val === v && v === 'pass' ? 'bg-green-600 text-white' :
+                              val === v && v === 'fail' ? 'bg-red-600 text-white' :
+                              'bg-slate-100 text-slate-600 hover:bg-slate-200',
+                            ].join(' ')}
+                          >
+                            {v === 'pass' ? 'Pass' : 'Fail'}
+                          </button>
+                        ))}
+                      </div>
                     </div>
                   </div>
-                  {scenario?.evaluation_criteria && (
-                    <div className="px-4 py-2 bg-slate-50 border-t border-slate-100">
-                      <p className="text-xs text-slate-500">
-                        Criteria: {typeof scenario.evaluation_criteria === 'string'
-                          ? scenario.evaluation_criteria
-                          : JSON.stringify(scenario.evaluation_criteria)}
-                      </p>
+                  {suggestion && (
+                    <div className="px-4 py-3 bg-violet-50 border-t border-violet-200 space-y-2">
+                      <p className="text-xs font-semibold text-violet-800">AI Suggestion</p>
+                      <p className="text-xs text-slate-600">{suggestion.summary}</p>
+                      {suggestion.changes?.map((c, i) => (
+                        <div key={i} className="flex gap-3 items-center">
+                          {c.from != null && (
+                            <span className="text-xs text-red-600 bg-red-50 border border-red-100 rounded px-2 py-0.5 line-through">{String(c.from)}</span>
+                          )}
+                          <span className="text-xs text-slate-400">→</span>
+                          <span className={`text-xs font-semibold rounded px-2 py-0.5 border ${suggestedScore === 'pass' ? 'text-green-700 bg-green-50 border-green-200' : 'text-red-700 bg-red-50 border-red-200'}`}>
+                            {String(c.to)}
+                          </span>
+                        </div>
+                      ))}
+                      <div className="flex items-center gap-2 pt-1">
+                        <button
+                          onClick={() => applyScenarioFix(key, suggestion)}
+                          disabled={saveStates[key] === 'saving'}
+                          className="text-xs font-medium px-3 py-1 rounded bg-violet-600 text-white hover:bg-violet-700 disabled:opacity-50"
+                        >
+                          {saveStates[key] === 'saving' ? 'Saving…' : 'Apply'}
+                        </button>
+                        <button
+                          onClick={() => setFixSuggestions(prev => ({ ...prev, [key]: null }))}
+                          disabled={saveStates[key] === 'saving'}
+                          className="text-xs font-medium px-3 py-1 rounded bg-white border border-slate-200 text-slate-600 hover:bg-slate-50"
+                        >
+                          Dismiss
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                  {saveStates[key] === 'saved' && (
+                    <div className="px-4 py-2 bg-green-50 border-t border-green-200">
+                      <p className="text-xs text-green-700 font-medium">✓ Score saved</p>
+                    </div>
+                  )}
+                  {saveStates[key] && saveStates[key] !== 'saving' && saveStates[key] !== 'saved' && (
+                    <div className="px-4 py-2 bg-red-50 border-t border-red-200">
+                      <p className="text-xs text-red-700">Save failed: {saveStates[key]}</p>
                     </div>
                   )}
                 </div>
@@ -567,7 +704,7 @@ function Stage6({ results, onChange }) {
   )
 }
 
-// ─── Evaluate with AI ────────────────────────────────────────────────────────
+// ─── AI Analyse & Fix ─────────────────────────────────────────────────────────
 
 function ScoreBadge({ score }) {
   if (score == null) return null
@@ -577,52 +714,9 @@ function ScoreBadge({ score }) {
   return <span className={`text-sm font-bold px-2.5 py-0.5 rounded-full border ${color}`}>{score}/10</span>
 }
 
-function EvalResultPanel({ result, onDismiss, onFix }) {
-  if (!result) return null
-  const showFix = !result.ready
-  return (
-    <div className="mt-4 border border-slate-200 rounded-xl bg-white p-5 space-y-3">
-      <div className="flex items-center justify-between flex-wrap gap-2">
-        <div className="flex items-center gap-2">
-          <ScoreBadge score={result.score} />
-          <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${result.ready ? 'bg-green-50 text-green-700' : 'bg-amber-50 text-amber-700'}`}>
-            {result.ready ? 'AI: Ready to advance' : 'AI: Needs improvement'}
-          </span>
-        </div>
-        <button onClick={onDismiss} className="text-slate-400 hover:text-slate-700" aria-label="Dismiss">
-          <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
-        </button>
-      </div>
-      {result.recommendations?.length > 0 && (
-        <ul className="space-y-1.5">
-          {result.recommendations.map((r, i) => (
-            <li key={i} className="flex gap-2 text-sm text-slate-700">
-              <span className="text-slate-400 shrink-0">–</span>{r}
-            </li>
-          ))}
-        </ul>
-      )}
-      {showFix && (
-        <div className="pt-1 border-t border-slate-100">
-          <button
-            onClick={onFix}
-            className="text-xs font-medium text-violet-700 hover:text-violet-900 flex items-center gap-1.5"
-          >
-            <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>
-            Fix these issues with AI →
-          </button>
-        </div>
-      )}
-    </div>
-  )
-}
-
-// ─── AI Fix Loading Steps ─────────────────────────────────────────────────────
-
 const FIX_STEPS = [
-  { key: 'fetch',    label: 'Fetching stage data and brand configuration' },
-  { key: 'analyze',  label: 'Analysing what is missing or incomplete' },
-  { key: 'generate', label: 'Generating specific suggestions with AI' },
+  { key: 'evaluate', label: 'Evaluating current stage with AI' },
+  { key: 'generate', label: 'Generating targeted fixes' },
 ]
 
 function AiFixLoading({ step }) {
@@ -676,45 +770,62 @@ function AiFixLoading({ step }) {
 function AiFixPanel({ fixResult, applying, applyError, onApply, onDismiss }) {
   if (!fixResult) return null
 
-  const { summary, changes } = fixResult
+  const { summary, changes, evalResult } = fixResult
+  const hasChanges = changes?.length > 0
 
   return (
     <div className="mt-4 border border-violet-200 rounded-xl bg-violet-50 overflow-hidden">
       <div className="flex items-center justify-between px-5 py-3 border-b border-violet-200 bg-violet-100">
         <div className="flex items-center gap-2">
-          <svg className="w-4 h-4 text-violet-600" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>
-          <p className="text-sm font-semibold text-violet-900">AI Fix — Review before applying</p>
+          {evalResult && <ScoreBadge score={evalResult.score} />}
+          <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${evalResult?.ready ? 'bg-green-50 text-green-700' : 'bg-amber-50 text-amber-700'}`}>
+            {evalResult?.ready ? 'AI: Ready to advance' : 'AI: Needs improvement'}
+          </span>
         </div>
         <button onClick={onDismiss} className="text-violet-400 hover:text-violet-700">
           <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
         </button>
       </div>
 
+      {evalResult?.recommendations?.length > 0 && (
+        <div className="px-5 pt-4">
+          <ul className="space-y-1.5">
+            {evalResult.recommendations.map((r, i) => (
+              <li key={i} className="flex gap-2 text-sm text-slate-700">
+                <span className="text-slate-400 shrink-0">–</span>{r}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
       <div className="px-5 py-4 space-y-3">
         <p className="text-xs text-violet-700 font-medium">{summary}</p>
 
-        <div className="space-y-2">
-          {changes.map((change, i) => (
-            <div key={i} className="bg-white border border-violet-100 rounded-lg p-3">
-              <p className="text-xs font-semibold text-slate-700 mb-1.5">{change.label}</p>
-              <div className="space-y-1">
-                {change.from != null && (
+        {hasChanges ? (
+          <div className="space-y-2">
+            {changes.map((change, i) => (
+              <div key={i} className="bg-white border border-violet-100 rounded-lg p-3">
+                <p className="text-xs font-semibold text-slate-700 mb-1.5">{change.label}</p>
+                <div className="space-y-1">
+                  {change.from != null && (
+                    <div className="flex gap-2 items-start">
+                      <span className="text-xs text-red-500 font-mono shrink-0 mt-0.5">−</span>
+                      <p className="text-xs text-red-700 bg-red-50 rounded px-2 py-1 w-full">{String(change.from)}</p>
+                    </div>
+                  )}
                   <div className="flex gap-2 items-start">
-                    <span className="text-xs text-red-500 font-mono shrink-0 mt-0.5">−</span>
-                    <p className="text-xs text-red-700 bg-red-50 rounded px-2 py-1 w-full">{String(change.from)}</p>
+                    <span className="text-xs text-green-600 font-mono shrink-0 mt-0.5">+</span>
+                    <p className="text-xs text-green-800 bg-green-50 rounded px-2 py-1 w-full whitespace-pre-wrap">{String(change.to)}</p>
                   </div>
-                )}
-                <div className="flex gap-2 items-start">
-                  <span className="text-xs text-green-600 font-mono shrink-0 mt-0.5">+</span>
-                  <p className="text-xs text-green-800 bg-green-50 rounded px-2 py-1 w-full whitespace-pre-wrap">{String(change.to)}</p>
                 </div>
               </div>
-            </div>
-          ))}
-        </div>
-
-        {changes.length === 0 && (
-          <p className="text-xs text-violet-600 text-center py-2">No specific changes to show — check the summary above.</p>
+            ))}
+          </div>
+        ) : (
+          <p className="text-xs text-slate-500 text-center py-4 border border-dashed border-violet-200 rounded-lg">
+            No specific changes needed — your configuration looks complete.
+          </p>
         )}
       </div>
 
@@ -723,14 +834,16 @@ function AiFixPanel({ fixResult, applying, applyError, onApply, onDismiss }) {
           <p className="text-xs text-red-700 bg-red-50 border border-red-200 rounded px-3 py-2">{applyError}</p>
         )}
         <div className="flex gap-2">
-          <Button
-            size="sm"
-            onClick={onApply}
-            disabled={applying}
-            className="bg-violet-600 hover:bg-violet-700 text-white"
-          >
-            {applying ? 'Applying…' : 'Apply Changes'}
-          </Button>
+          {hasChanges && (
+            <Button
+              size="sm"
+              onClick={onApply}
+              disabled={applying}
+              className="bg-violet-600 hover:bg-violet-700 text-white"
+            >
+              {applying ? 'Applying…' : 'Apply Changes'}
+            </Button>
+          )}
           <Button size="sm" variant="outline" onClick={onDismiss} disabled={applying}>
             Dismiss
           </Button>
@@ -742,9 +855,13 @@ function AiFixPanel({ fixResult, applying, applyError, onApply, onDismiss }) {
 
 // ─── Completion rules ────────────────────────────────────────────────────────
 
-function canComplete(num, results, scores) {
+function canComplete(num, results, scores, scenarios = []) {
   if (num === 1) return ONBOARDING_CHECKS.every(c => results[c.id])
-  if (num === 2) return Object.values(scores ?? {}).filter(v => v === 'pass').length >= 25
+  if (num === 2) {
+    // Require every actual scenario in the DB to be marked "pass"
+    if (scenarios.length === 0) return false
+    return scenarios.every(s => scores[`${s.test_set}${s.scenario_number}`] === 'pass')
+  }
   if (num === 3) return !!(results.week1?.passed && results.week2?.passed)
   if (num === 4) return !!(results.test1?.passed && results.test2?.passed && results.test3?.passed)
   if (num === 5) return !!results.deployed_date
@@ -767,9 +884,6 @@ export default function StagePage() {
   const [scenarios, setScenarios] = useState([])
   const [brand, setBrand] = useState(null)
   const [brandConfig, setBrandConfig] = useState(null)
-  const [isEvaluating, setIsEvaluating] = useState(false)
-  const [evalResult, setEvalResult]     = useState(null)
-  const [evalError, setEvalError]       = useState('')
   const [isFixing, setIsFixing] = useState(false)
   const [fixStep, setFixStep] = useState(null)
   const [fixResult, setFixResult] = useState(null)
@@ -785,6 +899,14 @@ export default function StagePage() {
       setScores(stage.test_scores ?? {})
     }
   }, [stage])
+
+  const handleSaveScenarioScores = useCallback(async (newScores) => {
+    await saveStage(num, {
+      status: stage?.status === 'Complete' ? 'Complete' : 'In Progress',
+      validation_results: results,
+      test_scores: newScores,
+    })
+  }, [saveStage, num, stage?.status, results])
 
   useEffect(() => {
     if (num === 2 && brandId) {
@@ -825,54 +947,27 @@ export default function StagePage() {
     }
   }
 
-  const handleEvaluate = async () => {
-    setIsEvaluating(true)
-    setEvalError('')
-    setEvalResult(null)
-    try {
-      const res = await apiCall(`/api/agents/${agentId}/training/${num}/evaluate`, { method: 'POST' })
-      setEvalResult(res)
-    } catch (err) {
-      setEvalError(err.message)
-    } finally {
-      setIsEvaluating(false)
-    }
-  }
-
-  const handleFix = async (fromEvalResult = null) => {
+  const handleAnalyseAndFix = async () => {
     setIsFixing(true)
-    setFixStep('fetch')
+    setFixStep('evaluate')
     setFixError('')
     setFixResult(null)
 
-    const recommendations = fromEvalResult?.recommendations ?? []
-
-    // Step timings aligned with what the API actually does:
-    // fetch → immediate, analyze → ~600ms, generate → ~1400ms
-    const t1 = setTimeout(() => setFixStep('analyze'),  600)
-    const t2 = setTimeout(() => setFixStep('generate'), 1400)
-
     try {
+      const evalRes = await apiCall(`/api/agents/${agentId}/training/${num}/evaluate`, { method: 'POST' })
+
+      setFixStep('generate')
+      const recommendations = evalRes?.recommendations ?? []
       const res = await apiCall(`/api/agents/${agentId}/training/${num}/fix`, {
         method: 'POST',
-        body: recommendations.length ? JSON.stringify({ recommendations }) : undefined,
+        body: JSON.stringify({ recommendations }),
       })
+
       if (res.error) { setFixError(res.error); return }
-      const hasChanges = res.changes?.length > 0
-      const hasPatch = res.patch && (
-        res.patch.type !== 'brand_config' ||
-        Object.keys(res.patch.config ?? {}).length > 0
-      )
-      if (!hasChanges && !hasPatch) {
-        setFixError(res.message ?? 'Nothing to fix — all data is already complete.')
-        return
-      }
-      setFixResult(res)
+      setFixResult({ ...res, evalResult: evalRes })
     } catch (err) {
       setFixError(err.message)
     } finally {
-      clearTimeout(t1)
-      clearTimeout(t2)
       setIsFixing(false)
       setFixStep(null)
     }
@@ -972,7 +1067,7 @@ export default function StagePage() {
 
       <Card className="p-8 mb-6">
         {num === 1 && <Stage1 brand={brand} brandConfig={brandConfig} />}
-        {num === 2 && <Stage2 scores={scores} onChange={setScores} scenarios={scenarios} brandId={brandId} agentId={agentId} />}
+        {num === 2 && <Stage2 scores={scores} onChange={setScores} scenarios={scenarios} brandId={brandId} agentId={agentId} onSaveScores={handleSaveScenarioScores} />}
         {num === 3 && <Stage3 results={results} onChange={setResults} />}
         {num === 4 && <Stage4 results={results} onChange={setResults} />}
         {num === 5 && <Stage5 results={results} onChange={setResults} />}
@@ -985,28 +1080,18 @@ export default function StagePage() {
           {!isComplete && (
             <Button
               variant="outline"
-              onClick={handleEvaluate}
-              disabled={isEvaluating || isSaving || isFixing}
-              className="text-blue-700 border-blue-200 hover:bg-blue-50"
-            >
-              {isEvaluating ? 'Evaluating…' : 'Evaluate with AI'}
-            </Button>
-          )}
-          {!isComplete && (
-            <Button
-              variant="outline"
-              onClick={handleFix}
-              disabled={isFixing || isSaving || isEvaluating}
+              onClick={handleAnalyseAndFix}
+              disabled={isFixing || isSaving}
               className="text-violet-700 border-violet-200 hover:bg-violet-50"
             >
-              AI Fix
+              {isFixing ? 'Analysing…' : 'Analyse & Fix'}
             </Button>
           )}
 
           {!isComplete && (
             <Button
               onClick={() => handleSave(true)}
-              disabled={isSaving || !canComplete(num, results, scores)}
+              disabled={isSaving || !canComplete(num, results, scores, scenarios)}
               className="flex-1"
             >
               {isSaving ? 'Saving…' : `Complete Stage ${num}`}
@@ -1026,18 +1111,6 @@ export default function StagePage() {
           )}
         </div>
       </Card>
-
-      {evalError && (
-        <Alert variant="destructive" className="mb-4">
-          <AlertDescription>{evalError}</AlertDescription>
-        </Alert>
-      )}
-
-      <EvalResultPanel
-        result={evalResult}
-        onDismiss={() => setEvalResult(null)}
-        onFix={() => { const r = evalResult; setEvalResult(null); handleFix(r) }}
-      />
 
       {fixError && (
         <Alert variant="destructive" className="mb-4">
@@ -1066,7 +1139,7 @@ export default function StagePage() {
       {num === 2 && !isComplete && (
         <Card className="mt-4 p-4 bg-blue-50 border-blue-200">
           <p className="text-xs text-blue-800">
-            Need 25/25 (100%) to pass.
+            Every scenario in your test bank must be marked Pass to complete this stage.
             {scenarios.length === 0 && ' Add scenario prompts from Brand → Scenarios to see them here.'}
           </p>
         </Card>

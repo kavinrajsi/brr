@@ -65,6 +65,7 @@ export default function AgentMetricsPage() {
   const { stages, isLoading: trainingLoading } = useTraining(agentId)
   const [agent, setAgent] = useState(null)
   const [agentLoading, setAgentLoading] = useState(true)
+  const [scenarioCount, setScenarioCount] = useState(0)
 
   useEffect(() => {
     apiCall(`/api/agents/${agentId}`)
@@ -72,6 +73,13 @@ export default function AgentMetricsPage() {
       .catch(() => {})
       .finally(() => setAgentLoading(false))
   }, [agentId])
+
+  useEffect(() => {
+    if (!brandId) return
+    apiCall(`/api/brands/${brandId}/scenarios`)
+      .then(data => setScenarioCount(Array.isArray(data) ? data.length : 0))
+      .catch(() => {})
+  }, [brandId])
 
   const isLoading = agentLoading || trainingLoading
 
@@ -97,7 +105,8 @@ export default function AgentMetricsPage() {
   const stage2Passed = stage2?.test_scores
     ? Object.values(stage2.test_scores).filter(v => v === 'pass').length
     : 0
-  const stage2Pct = Math.round((stage2Passed / 25) * 100)
+  const stage2Total = scenarioCount > 0 ? scenarioCount : 25
+  const stage2Pct = Math.round((stage2Passed / stage2Total) * 100)
 
   return (
     <div>
@@ -126,7 +135,7 @@ export default function AgentMetricsPage() {
           <p className={`text-3xl font-bold mt-1 ${stage2Pct === 100 ? 'text-green-600' : stage2Pct > 0 ? 'text-yellow-600' : 'text-slate-400'}`}>
             {stage2Pct > 0 ? `${stage2Pct}%` : '—'}
           </p>
-          <p className="text-xs text-slate-500 mt-1">{stage2Passed > 0 ? `${stage2Passed}/25 passed` : 'Stage 2 not started'}</p>
+          <p className="text-xs text-slate-500 mt-1">{stage2Passed > 0 ? `${stage2Passed}/${stage2Total} passed` : 'Stage 2 not started'}</p>
         </Card>
         <Card className="p-5">
           <p className="text-xs text-slate-500 font-medium uppercase tracking-wider">Certified</p>

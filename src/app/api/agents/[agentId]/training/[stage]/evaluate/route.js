@@ -53,7 +53,7 @@ Evaluate:
 3. Is there anything vague, placeholder-like, or missing that would prevent the agent from representing the brand accurately?
 
 Score 1-10. Give 10 if all criteria are genuinely met — do not lower the score just to justify recommendations.
-If score is 10, recommendations may be empty. If score is below 10, give up to 3 specific actionable recommendations.
+If score is 10, recommendations may be empty. If score is below 10, give as many specific actionable recommendations as needed to address all identified issues.
 Respond ONLY with JSON: { "score": <1-10>, "ready": <true if score >= 10>, "recommendations": [] }`
 }
 
@@ -99,7 +99,7 @@ Evaluate:
 4. What specific areas need improvement before advancing?
 
 Score 1-10. Give 10 if all criteria are genuinely met — do not lower the score just to justify recommendations.
-If score is 10, recommendations may be empty. If score is below 10, give up to 3 specific actionable recommendations.
+If score is 10, recommendations may be empty. If score is below 10, give as many specific actionable recommendations as needed to address all identified issues.
 Respond ONLY with JSON: { "score": <1-10>, "ready": <true if score >= 10>, "recommendations": [] }`
 }
 
@@ -135,7 +135,7 @@ Evaluate:
 4. What should be reviewed more rigorously before advancing?
 
 Score 1-10. Give 10 if all criteria are genuinely met — do not lower the score just to justify recommendations.
-If score is 10, recommendations may be empty. If score is below 10, give up to 3 specific actionable recommendations.
+If score is 10, recommendations may be empty. If score is below 10, give as many specific actionable recommendations as needed to address all identified issues.
 Respond ONLY with JSON: { "score": <1-10>, "ready": <true if score >= 10>, "recommendations": [] }`
 }
 
@@ -174,7 +174,7 @@ Evaluate:
 4. Is the evaluator's judgment (notes) rigorous, or are tests being passed too easily?
 
 Score 1-10. Give 10 if all criteria are genuinely met — do not lower the score just to justify recommendations.
-If score is 10, recommendations may be empty. If score is below 10, give up to 3 specific actionable recommendations.
+If score is 10, recommendations may be empty. If score is below 10, give as many specific actionable recommendations as needed to address all identified issues.
 Respond ONLY with JSON: { "score": <1-10>, "ready": <true if score >= 10>, "recommendations": [] }`
 }
 
@@ -211,7 +211,7 @@ Evaluate:
 4. Does the monthly review summarise performance trends, not just state "all good"?
 
 Score 1-10. Give 10 if all criteria are genuinely met — do not lower the score just to justify recommendations.
-If score is 10, recommendations may be empty. If score is below 10, give up to 3 specific actionable recommendations.
+If score is 10, recommendations may be empty. If score is below 10, give as many specific actionable recommendations as needed to address all identified issues.
 Respond ONLY with JSON: { "score": <1-10>, "ready": <true if score >= 10>, "recommendations": [] }`
 }
 
@@ -244,7 +244,7 @@ Evaluate:
 4. Is this brand keeping its AI agent current with how the brand actually operates?
 
 Score 1-10. Give 10 if all criteria are genuinely met — do not lower the score just to justify recommendations.
-If score is 10, recommendations may be empty. If score is below 10, give up to 3 specific actionable recommendations.
+If score is 10, recommendations may be empty. If score is below 10, give as many specific actionable recommendations as needed to address all identified issues.
 Respond ONLY with JSON: { "score": <1-10>, "ready": <true if score >= 10>, "recommendations": [] }`
 }
 
@@ -318,7 +318,7 @@ export async function POST(req, { params }) {
     if (isNaN(score) || score < 1 || score > 10) throw new Error('score out of range')
     const ready = Boolean(parsed.ready ?? score >= 10)
     const recommendations = Array.isArray(parsed.recommendations)
-      ? parsed.recommendations.slice(0, 3).map(String)
+      ? parsed.recommendations.map(String)
       : []
     return Response.json({ score, ready, recommendations })
   } catch {

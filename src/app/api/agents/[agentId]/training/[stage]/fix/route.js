@@ -52,16 +52,23 @@ function buildStage1Fix(brandName, config, recommendations = []) {
     ? `\nEvaluation flagged these specific issues to fix:\n${recommendations.map((r, i) => `  ${i + 1}. ${r}`).join('\n')}\nPrioritise addressing these issues in your changes.\n`
     : ''
 
+  const scopeRule = recommendations.length > 0
+    ? `Your task — for each field decide:
+1. If EMPTY: generate specific, realistic content based on the brand name and existing context
+2. If flagged by the evaluation above: improve it to address the specific issue
+3. Otherwise: skip it — do not include it in changes`
+    : `Your task — for each field decide:
+1. If EMPTY: generate specific, realistic content based on the brand name and existing context
+2. If the value is fewer than 8 words or is clearly a placeholder (e.g. "TBD", "N/A", a single adjective with no context): improve it
+3. If the field already has substantial, specific content: skip it — do not include it in changes
+IMPORTANT: If all fields already contain substantial content, return an empty changes array with summary "All fields are already complete — run Evaluate with AI to get specific improvement recommendations."`
+
   return `You are an expert brand strategist improving the brand configuration for "${brandName}".
 
 Current brand configuration:
 ${fieldSummary}
 ${evalSection}
-Your task — for each field decide:
-1. If EMPTY: generate specific, realistic content based on the brand name and existing context
-2. If already filled but too short or generic (under 10 words, no specifics, placeholder-like): improve it with more actionable detail
-3. If already specific and complete but flagged by the evaluation above: improve it to address the specific issue
-4. If already complete and not flagged: skip it — do not include it in changes
+${scopeRule}
 
 Quality standards:
 - "prohibited_topics": must list concrete scenarios (e.g. "Do not discuss competitor pricing; do not make delivery guarantees; do not process refund requests on worn items")
@@ -83,11 +90,45 @@ Respond ONLY with JSON in this exact format:
 }`
 }
 
-function buildStage2Fix(brandName, config, testScores, scenarios, recommendations = []) {
-  const unscored = []
+function buildStage2Fix(brandName, config, testScores, scenarios, recommendations = [], scenarioKey = null) {
   const scenarioMap = {}
   scenarios.forEach(s => { scenarioMap[`${s.test_set}${s.scenario_number}`] = s })
 
+  // Single-scenario mode
+  if (scenarioKey) {
+    const scenario = scenarioMap[scenarioKey]
+    const currentScore = testScores[scenarioKey] || null
+    const criteria = scenario?.evaluation_criteria
+      ? `\nEvaluation criteria: ${typeof scenario.evaluation_criteria === 'string' ? scenario.evaluation_criteria : JSON.stringify(scenario.evaluation_criteria)}`
+      : ''
+    const goodEx = scenario?.good_example ? `\nGood example response: "${scenario.good_example}"` : ''
+    const badEx  = scenario?.bad_example  ? `\nBad example response: "${scenario.bad_example}"`  : ''
+    return `You are evaluating a single test scenario for brand AI agent "${brandName}".
+
+Brand context:
+- Tone: ${config.tone || 'not defined'}
+- Target audience: ${config.target_audience || 'not defined'}
+- Prohibited topics: ${config.prohibited_topics || 'not defined'}
+
+Scenario ${scenarioKey}: ${scenario?.input_prompt ? `"${scenario.input_prompt}"` : '(no prompt added yet)'}${criteria}${goodEx}${badEx}
+Current score: ${currentScore || 'not yet scored'}
+
+Based on the scenario prompt, evaluation criteria, and brand context, decide whether a well-configured brand-aligned AI agent would pass or fail this scenario:
+- pass — straightforward for a well-configured agent matching this brand
+- fail — complex, edge-case, or beyond what the brand config covers
+
+CRITICAL: You must choose either "pass" or "fail" based on your judgment. Do NOT default to "pass". If the brand config is missing key context for this scenario, choose "fail".
+
+Respond ONLY with JSON, replacing <YOUR_DECISION> with your chosen value (literally "pass" or "fail"):
+{
+  "summary": "<one-sentence reason for your decision>",
+  "changes": [{ "label": "Scenario ${scenarioKey}", "field": "${scenarioKey}", "from": ${currentScore ? `"${currentScore}"` : 'null'}, "to": "<YOUR_DECISION>" }],
+  "patch": { "type": "training_progress", "test_scores": { "${scenarioKey}": "<YOUR_DECISION>" } }
+}`
+  }
+
+  // Bulk mode — score all unscored scenarios
+  const unscored = []
   const sets = { A: 6, B: 6, C: 5, D: 3, E: 5 }
   for (const [set, count] of Object.entries(sets)) {
     for (let i = 1; i <= count; i++) {
@@ -113,14 +154,18 @@ Brand tone: ${config.tone || 'not defined'}
 Target audience: ${config.target_audience || 'not defined'}
 Prohibited topics: ${config.prohibited_topics || 'not defined'}
 
-The following scenarios have not been scored yet. Based on the scenario prompt and the brand context, suggest whether the agent would likely pass or fail each one. Use "pass" if the scenario seems straightforward for a well-configured agent, "fail" if it tests something complex or edge-case that needs more work.
+The following scenarios have not been scored yet. For each one, decide pass or fail:
+- pass — straightforward for a well-configured agent matching this brand
+- fail — complex, edge-case, missing prompt, or beyond what the brand config covers
+
+CRITICAL: Make a real judgment for each scenario. Do NOT default to "pass" for everything. Scenarios with no prompt should be "fail".
 
 Unscored scenarios:
 ${unscored.map(u => `  ${u.key}: ${u.prompt ? `"${u.prompt}"` : '(no prompt added yet)'}`).join('\n')}
 
-Respond ONLY with JSON in this exact format:
+Respond ONLY with JSON. The "to" values and "test_scores" values must each be either "pass" or "fail" based on YOUR judgment:
 {
-  "summary": "Scored X unscored scenarios based on brand context",
+  "summary": "Scored X unscored scenarios — N pass, M fail",
   "changes": [
     { "label": "Scenario A1", "field": "A1", "from": null, "to": "pass" }
   ],
@@ -318,9 +363,12 @@ export async function POST(req, { params }) {
 
   const [user, body, { agentId, stage }] = await Promise.all([
     getUserFromRequest(req),
-    req.json().catch(() => ({})),
+    req.text().then(t => t ? JSON.parse(t) : {}).catch(() => null),
     params,
   ])
+  if (body === null) {
+    return Response.json({ error: 'Invalid JSON in request body' }, { status: 400 })
+  }
   if (!user) return Response.json({ error: 'Unauthorized' }, { status: 401 })
   const stageNum = parseInt(stage, 10)
   if (isNaN(stageNum) || stageNum < 1 || stageNum > 6) {
@@ -335,7 +383,7 @@ export async function POST(req, { params }) {
     supabase.from('brand_configs').select('config').eq('brand_id', owned.brand_id).single(),
     supabase.from('training_progress').select('validation_results, test_scores').eq('agent_id', agentId).eq('stage', stageNum).single(),
     stageNum === 2
-      ? supabase.from('test_scenarios').select('test_set, scenario_number, input_prompt').eq('brand_id', owned.brand_id).order('test_set').order('scenario_number')
+      ? supabase.from('test_scenarios').select('test_set, scenario_number, input_prompt, good_example, bad_example, evaluation_criteria').eq('brand_id', owned.brand_id).order('test_set').order('scenario_number')
       : Promise.resolve({ data: [] }),
   ])
 
@@ -346,11 +394,12 @@ export async function POST(req, { params }) {
   const brandName         = owned.brands.name
   const brandId           = owned.brand_id
 
-  const recommendations = Array.isArray(body?.recommendations) ? body.recommendations.slice(0, 5).map(String) : []
+  const recommendations = Array.isArray(body?.recommendations) ? body.recommendations.map(String) : []
+  const scenarioKey = typeof body?.scenario === 'string' ? body.scenario : null
 
   const promptBuilders = {
     1: () => buildStage1Fix(brandName, config, recommendations),
-    2: () => buildStage2Fix(brandName, config, testScores, scenarios, recommendations),
+    2: () => buildStage2Fix(brandName, config, testScores, scenarios, recommendations, scenarioKey),
     3: () => buildStage3Fix(brandName, config, validationResults, recommendations),
     4: () => buildStage4Fix(brandName, config, validationResults, recommendations),
     5: () => buildStage5Fix(brandName, config, validationResults, recommendations),
@@ -367,7 +416,7 @@ export async function POST(req, { params }) {
   try {
     aiResponse = await anthropic.messages.create({
       model: 'claude-haiku-4-5-20251001',
-      max_tokens: 3000,
+      max_tokens: 6000,
       system: 'You are an expert brand AI training assistant. Generate specific, realistic content to fill in missing training data. Respond only with valid JSON. Keep each suggested value concise (1-3 sentences max).',
       messages: [{ role: 'user', content: userMessage }],
     })
@@ -380,10 +429,25 @@ export async function POST(req, { params }) {
 
   try {
     const parsed = parseAnthropicJson(rawText)
+    let patch = parsed.patch ?? null
+
+    // Stage 2: scrub non-pass/fail values from test_scores patches (LLM safety net)
+    if (stageNum === 2 && patch?.test_scores) {
+      const cleaned = {}
+      for (const [k, v] of Object.entries(patch.test_scores)) {
+        const val = String(v).toLowerCase().trim()
+        if (val === 'pass' || val === 'fail') cleaned[k] = val
+      }
+      if (Object.keys(cleaned).length === 0) {
+        return Response.json({ error: 'AI returned invalid scores — please try again' }, { status: 502 })
+      }
+      patch = { ...patch, test_scores: cleaned }
+    }
+
     return Response.json({
       summary: String(parsed.summary ?? 'AI suggested changes'),
       changes: Array.isArray(parsed.changes) ? parsed.changes : [],
-      patch: parsed.patch ?? null,
+      patch,
       brandId,
     })
   } catch {
