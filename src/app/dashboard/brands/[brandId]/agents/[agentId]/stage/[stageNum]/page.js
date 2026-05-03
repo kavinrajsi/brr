@@ -78,7 +78,7 @@ function Stage1({ brand, brandConfig, results, onChange }) {
           <div
             key={item.id}
             className={[
-              'flex items-start gap-3 p-4 rounded-lg border',
+              'flex items-start gap-3 mt-4 p-4 rounded-lg border',
               verified ? 'bg-green-50 border-green-200' : 'bg-amber-50 border-amber-200',
             ].join(' ')}
           >
@@ -144,7 +144,7 @@ function Stage2({ scores, onChange, scenarios, brandId, agentId }) {
   return (
     <div className="space-y-6">
       {/* Workflow guide */}
-      <div className="bg-blue-50 border border-blue-200 rounded-xl p-4 space-y-2">
+      <div className="bg-blue-50 border border-blue-200 rounded-xl mt-4 p-4 space-y-2">
         <p className="text-sm font-semibold text-blue-900">How to complete this stage</p>
         <ol className="text-xs text-blue-800 space-y-1 list-decimal list-inside">
           <li>
@@ -167,7 +167,7 @@ function Stage2({ scores, onChange, scenarios, brandId, agentId }) {
       </div>
 
       {/* Score bar */}
-      <div className="flex items-center justify-between p-4 bg-slate-50 rounded-lg">
+      <div className="flex items-center justify-between mt-4 p-4 bg-slate-50 rounded-lg">
         <p className="text-sm font-semibold text-slate-700">Score</p>
         <p className={`text-lg font-bold ${pct === 100 ? 'text-green-600' : 'text-slate-900'}`}>
           {passed}/25 ({pct}%) {pct === 100 ? '✓ Pass' : ''}
@@ -432,7 +432,7 @@ function Stage5({ results, onChange }) {
         )}
         <div className="space-y-3">
           {(results.spot_checks ?? []).map((check, idx) => (
-            <div key={idx} className="border border-slate-200 rounded-lg p-4 space-y-3">
+            <div key={idx} className="border border-slate-200 rounded-lg mt-4 p-4 space-y-3">
               <div className="flex items-center justify-between">
                 <input
                   type="date"
@@ -523,7 +523,7 @@ function Stage6({ results, onChange }) {
         )}
         <div className="space-y-3">
           {(results.brr_updates ?? []).map((u, idx) => (
-            <div key={idx} className="border border-slate-200 rounded-lg p-4 space-y-3">
+            <div key={idx} className="border border-slate-200 rounded-lg mt-4 p-4 space-y-3">
               <div className="flex items-center gap-3">
                 <div className="flex-1">
                   <label className="text-xs text-slate-500 block mb-1">Date</label>
@@ -829,11 +829,13 @@ export default function StagePage() {
     }
   }
 
-  const handleFix = async () => {
+  const handleFix = async (fromEvalResult = null) => {
     setIsFixing(true)
     setFixStep('fetch')
     setFixError('')
     setFixResult(null)
+
+    const recommendations = fromEvalResult?.recommendations ?? []
 
     // Step timings aligned with what the API actually does:
     // fetch → immediate, analyze → ~600ms, generate → ~1400ms
@@ -841,7 +843,10 @@ export default function StagePage() {
     const t2 = setTimeout(() => setFixStep('generate'), 1400)
 
     try {
-      const res = await apiCall(`/api/agents/${agentId}/training/${num}/fix`, { method: 'POST' })
+      const res = await apiCall(`/api/agents/${agentId}/training/${num}/fix`, {
+        method: 'POST',
+        body: recommendations.length ? JSON.stringify({ recommendations }) : undefined,
+      })
       if (res.error) { setFixError(res.error); return }
       const hasChanges = res.changes?.length > 0
       const hasPatch = res.patch && (
@@ -1020,7 +1025,7 @@ export default function StagePage() {
       <EvalResultPanel
         result={evalResult}
         onDismiss={() => setEvalResult(null)}
-        onFix={() => { setEvalResult(null); handleFix() }}
+        onFix={() => { const r = evalResult; setEvalResult(null); handleFix(r) }}
       />
 
       {fixError && (
@@ -1042,12 +1047,12 @@ export default function StagePage() {
 
       {/* Stage-specific hints */}
       {num === 1 && !isComplete && (
-        <Card className="p-4 bg-blue-50 border-blue-200">
+        <Card className="mt-4 p-4 bg-blue-50 border-blue-200">
           <p className="text-xs text-blue-800">All 5 checkpoints must be ticked to complete this stage.</p>
         </Card>
       )}
       {num === 2 && !isComplete && (
-        <Card className="p-4 bg-blue-50 border-blue-200">
+        <Card className="mt-4 p-4 bg-blue-50 border-blue-200">
           <p className="text-xs text-blue-800">
             Need 25/25 (100%) to pass.
             {scenarios.length === 0 && ' Add scenario prompts from Brand → Scenarios to see them here.'}
@@ -1055,17 +1060,17 @@ export default function StagePage() {
         </Card>
       )}
       {num === 3 && !isComplete && (
-        <Card className="p-4 bg-blue-50 border-blue-200">
+        <Card className="mt-4 p-4 bg-blue-50 border-blue-200">
           <p className="text-xs text-blue-800">Both Week 1 and Week 2 reviews must be marked Pass.</p>
         </Card>
       )}
       {num === 4 && !isComplete && (
-        <Card className="p-4 bg-blue-50 border-blue-200">
+        <Card className="mt-4 p-4 bg-blue-50 border-blue-200">
           <p className="text-xs text-blue-800">All 3 certification tests must pass.</p>
         </Card>
       )}
       {num === 5 && !isComplete && (
-        <Card className="p-4 bg-blue-50 border-blue-200">
+        <Card className="mt-4 p-4 bg-blue-50 border-blue-200">
           <p className="text-xs text-blue-800">Enter the deployment date to enable completion.</p>
         </Card>
       )}

@@ -19,7 +19,7 @@ function parseAnthropicJson(text) {
 
 // ─── Stage-specific fix prompt builders ──────────────────────────────────────
 
-function buildStage1Fix(brandName, config) {
+function buildStage1Fix(brandName, config, recommendations = []) {
   const KEY_FIELDS = [
     { field: 'physique',             label: 'Visual identity / physique' },
     { field: 'tagline',              label: 'Tagline or slogan' },
@@ -48,21 +48,27 @@ function buildStage1Fix(brandName, config) {
     return `  ${label} (${field}): ${val ? `"${val}"` : 'EMPTY'}`
   }).join('\n')
 
+  const evalSection = recommendations.length > 0
+    ? `\nEvaluation flagged these specific issues to fix:\n${recommendations.map((r, i) => `  ${i + 1}. ${r}`).join('\n')}\nPrioritise addressing these issues in your changes.\n`
+    : ''
+
   return `You are an expert brand strategist improving the brand configuration for "${brandName}".
 
 Current brand configuration:
 ${fieldSummary}
-
+${evalSection}
 Your task — for each field decide:
 1. If EMPTY: generate specific, realistic content based on the brand name and existing context
 2. If already filled but too short or generic (under 10 words, no specifics, placeholder-like): improve it with more actionable detail
-3. If already specific and complete: skip it — do not include it in changes
+3. If already specific and complete but flagged by the evaluation above: improve it to address the specific issue
+4. If already complete and not flagged: skip it — do not include it in changes
 
 Quality standards:
 - "prohibited_topics": must list concrete scenarios (e.g. "Do not discuss competitor pricing; do not make delivery guarantees; do not process refund requests on worn items")
-- "escalation_triggers": must include specific situations (e.g. "Order lost after 14 days; customer mentions chargeback or legal action; complaint about sizing on second purchase")
+- "escalation_triggers": must include specific situations AND define agent authority (e.g. "Order lost after 14 days → request photo evidence then escalate; customer mentions chargeback → auto-escalate, do not negotiate")
 - "tone": must describe voice with adjectives and examples, not just a single word
-- "escalation_triggers" and "prohibited_topics" together are the most important AI guardrails — make them very specific
+- "relationship_type": describe HOW the brand builds loyalty (community, repeat purchase incentives, peer recommendations, etc.)
+- "escalation_triggers" and "prohibited_topics" together are the most critical AI guardrails — make them very specific
 
 Respond ONLY with JSON in this exact format:
 {
@@ -77,7 +83,7 @@ Respond ONLY with JSON in this exact format:
 }`
 }
 
-function buildStage2Fix(brandName, config, testScores, scenarios) {
+function buildStage2Fix(brandName, config, testScores, scenarios, recommendations = []) {
   const unscored = []
   const scenarioMap = {}
   scenarios.forEach(s => { scenarioMap[`${s.test_set}${s.scenario_number}`] = s })
@@ -97,8 +103,12 @@ function buildStage2Fix(brandName, config, testScores, scenarios) {
     return null // nothing to fix
   }
 
-  return `You are evaluating test scenarios for brand AI agent "${brandName}".
+  const evalSection = recommendations.length > 0
+    ? `\nEvaluation flagged these issues:\n${recommendations.map((r, i) => `  ${i + 1}. ${r}`).join('\n')}\n`
+    : ''
 
+  return `You are evaluating test scenarios for brand AI agent "${brandName}".
+${evalSection}
 Brand tone: ${config.tone || 'not defined'}
 Target audience: ${config.target_audience || 'not defined'}
 Prohibited topics: ${config.prohibited_topics || 'not defined'}
@@ -121,14 +131,18 @@ Respond ONLY with JSON in this exact format:
 }`
 }
 
-function buildStage3Fix(brandName, config, validationResults) {
+function buildStage3Fix(brandName, config, validationResults, recommendations = []) {
   const w1 = validationResults?.week1 ?? {}
   const w2 = validationResults?.week2 ?? {}
   const today = new Date().toISOString().split('T')[0]
   const lastWeek = new Date(Date.now() - 7 * 86400000).toISOString().split('T')[0]
 
-  return `You are writing probation review notes for brand AI agent "${brandName}".
+  const evalSection = recommendations.length > 0
+    ? `\nEvaluation flagged these issues to address:\n${recommendations.map((r, i) => `  ${i + 1}. ${r}`).join('\n')}\n`
+    : ''
 
+  return `You are writing probation review notes for brand AI agent "${brandName}".
+${evalSection}
 Brand voice:
 - Tone: ${config.tone || 'not defined'}
 - Prohibited topics: ${config.prohibited_topics || 'not defined'}
@@ -165,7 +179,7 @@ Respond ONLY with JSON in this exact format:
 }`
 }
 
-function buildStage4Fix(brandName, config, validationResults) {
+function buildStage4Fix(brandName, config, validationResults, recommendations = []) {
   const tests = [
     { id: 'test1', label: 'Write a Brand Caption', desc: 'Write a social media caption that matches brand voice and guidelines.' },
     { id: 'test2', label: 'Identify Brand Violations', desc: 'Review 3 pieces of content and flag what violates the brand guidelines.' },
@@ -173,9 +187,12 @@ function buildStage4Fix(brandName, config, validationResults) {
   ]
 
   const missing = tests.filter(t => !validationResults?.[t.id]?.output?.trim())
+  const evalSection = recommendations.length > 0
+    ? `\nEvaluation flagged these issues to address:\n${recommendations.map((r, i) => `  ${i + 1}. ${r}`).join('\n')}\n`
+    : ''
 
   return `You are generating sample certification test outputs for brand AI agent "${brandName}".
-
+${evalSection}
 Brand configuration:
 - Tone: ${config.tone || 'not defined'}
 - Response style: ${config.response_style || 'not defined'}
@@ -208,11 +225,14 @@ Respond ONLY with JSON in this exact format:
 }`
 }
 
-function buildStage5Fix(brandName, config, validationResults) {
+function buildStage5Fix(brandName, config, validationResults, recommendations = []) {
   const today = new Date().toISOString().split('T')[0]
+  const evalSection = recommendations.length > 0
+    ? `\nEvaluation flagged these issues to address:\n${recommendations.map((r, i) => `  ${i + 1}. ${r}`).join('\n')}\n`
+    : ''
 
   return `You are generating a spot-check entry for deployed brand AI agent "${brandName}".
-
+${evalSection}
 Brand guardrails:
 - Tone: ${config.tone || 'not defined'}
 - Prohibited topics: ${config.prohibited_topics || 'not defined'}
@@ -245,14 +265,18 @@ Respond ONLY with JSON in this exact format:
 }`
 }
 
-function buildStage6Fix(brandName, config, validationResults) {
+function buildStage6Fix(brandName, config, validationResults, recommendations = []) {
   const today = new Date().toISOString().split('T')[0]
   const existingUpdates = validationResults?.brr_updates ?? []
   const nextVersion = existingUpdates.length > 0
     ? `1.${existingUpdates.length + 1}`
     : '1.1'
+  const evalSection = recommendations.length > 0
+    ? `\nEvaluation flagged these issues to address:\n${recommendations.map((r, i) => `  ${i + 1}. ${r}`).join('\n')}\n`
+    : ''
 
   return `You are logging a BRR (Brand Road Rules) update for brand AI agent "${brandName}".
+${evalSection}
 
 Current brand configuration:
 - Tone: ${config.tone || 'not defined'}
@@ -320,13 +344,16 @@ export async function POST(req, { params }) {
   const brandName         = owned.brands.name
   const brandId           = owned.brand_id
 
+  const body = await req.json().catch(() => ({}))
+  const recommendations = Array.isArray(body?.recommendations) ? body.recommendations.slice(0, 5).map(String) : []
+
   const promptBuilders = {
-    1: () => buildStage1Fix(brandName, config),
-    2: () => buildStage2Fix(brandName, config, testScores, scenarios),
-    3: () => buildStage3Fix(brandName, config, validationResults),
-    4: () => buildStage4Fix(brandName, config, validationResults),
-    5: () => buildStage5Fix(brandName, config, validationResults),
-    6: () => buildStage6Fix(brandName, config, validationResults),
+    1: () => buildStage1Fix(brandName, config, recommendations),
+    2: () => buildStage2Fix(brandName, config, testScores, scenarios, recommendations),
+    3: () => buildStage3Fix(brandName, config, validationResults, recommendations),
+    4: () => buildStage4Fix(brandName, config, validationResults, recommendations),
+    5: () => buildStage5Fix(brandName, config, validationResults, recommendations),
+    6: () => buildStage6Fix(brandName, config, validationResults, recommendations),
   }
 
   const userMessage = promptBuilders[stageNum]()
