@@ -84,7 +84,7 @@ export default function DashboardPage() {
           <li className="flex items-start">
             <span className="text-green-600 font-bold mr-3">✓</span>
             <span>
-              <strong>Train an Agent:</strong> Upload your brand config and start the 8-week training process
+              <strong>Train an Agent:</strong> Upload your brand config and walk through the 6-stage training pipeline
             </span>
           </li>
           <li className="flex items-start">

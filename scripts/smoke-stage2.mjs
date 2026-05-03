@@ -6,25 +6,40 @@
  *   1. Start the dev server: `npm run dev`
  *   2. Open the app in your browser, sign in
  *   3. Open DevTools → Application → Local Storage → http://localhost:3000
- *   4. Find the key starting with `sb-` and ending in `-auth-token`. Copy the `access_token` value
- *   5. Open a Stage 2 page, copy the `brandId` and `agentId` from the URL
+ *   4. Find the key starting with `sb-` and ending in `-auth-token`
+ *   5. Copy the `access_token` value into ./.smoke-token (gitignored) — this
+ *      avoids putting the JWT into your shell history / process listing
+ *   6. Open a Stage 2 page, copy `brandId` and `agentId` from the URL
  *
  * Run:
- *   BRAND_ID=... AGENT_ID=... TOKEN=... node scripts/smoke-stage2.mjs
+ *   BRAND_ID=... AGENT_ID=... node scripts/smoke-stage2.mjs
+ *
+ * Token resolution order: TOKEN env > ./.smoke-token file
  *
  * Optional:
  *   BASE=http://localhost:3000   # defaults to localhost:3000
  *   SCENARIO_KEY=A1              # defaults to first scenario found
  */
 
+import { readFileSync, existsSync } from 'fs'
+import { join, dirname } from 'path'
+import { fileURLToPath } from 'url'
+
+const __dirname = dirname(fileURLToPath(import.meta.url))
+const TOKEN_FILE = join(__dirname, '..', '.smoke-token')
+
 const BASE     = process.env.BASE || 'http://localhost:3000'
-const TOKEN    = process.env.TOKEN
 const BRAND_ID = process.env.BRAND_ID
 const AGENT_ID = process.env.AGENT_ID
 const SCENARIO_OVERRIDE = process.env.SCENARIO_KEY
 
+let TOKEN = process.env.TOKEN
+if (!TOKEN && existsSync(TOKEN_FILE)) {
+  TOKEN = readFileSync(TOKEN_FILE, 'utf8').trim()
+}
+
 if (!TOKEN || !BRAND_ID || !AGENT_ID) {
-  console.error('Missing required env: TOKEN, BRAND_ID, AGENT_ID')
+  console.error('Missing required input: TOKEN (env or ./.smoke-token file), BRAND_ID, AGENT_ID')
   console.error('See header of this file for setup instructions.')
   process.exit(1)
 }

@@ -1,0 +1,29 @@
+# CODEOWNERS — auto-request review from the listed owners on PRs that touch
+# matching paths. Order matters: later patterns override earlier ones.
+#
+# See https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-security/managing-repository-settings/about-code-owners
+
+# Default owner for everything
+*                                           @kavinrajsi
+
+# Security-sensitive surfaces — extra eyes required
+/src/lib/permissions.js                     @kavinrajsi
+/src/lib/supabase-server.js                 @kavinrajsi
+/src/lib/webhook.js                         @kavinrajsi
+/src/lib/stripe.js                          @kavinrajsi
+/src/lib/training-manager.js                @kavinrajsi
+/src/app/api/admin/                         @kavinrajsi
+/src/app/api/billing/                       @kavinrajsi
+/src/app/api/agents/[agentId]/chat/         @kavinrajsi
+/src/app/api/agents/[agentId]/keys/         @kavinrajsi
+/src/app/api/mcp/                           @kavinrajsi
+/src/app/api/organizations/                 @kavinrajsi
+/src/app/api/invites/                       @kavinrajsi
+
+# Build / config
+/package.json                               @kavinrajsi
+/package-lock.json                          @kavinrajsi
+/next.config.mjs                            @kavinrajsi
+/.github/                                   @kavinrajsi
+/CODEOWNERS                                 @kavinrajsi
+/SECURITY.md                                @kavinrajsi
