@@ -843,7 +843,12 @@ export default function StagePage() {
     try {
       const res = await apiCall(`/api/agents/${agentId}/training/${num}/fix`, { method: 'POST' })
       if (res.error) { setFixError(res.error); return }
-      if (res.changes?.length === 0 && !res.patch) {
+      const hasChanges = res.changes?.length > 0
+      const hasPatch = res.patch && (
+        res.patch.type !== 'brand_config' ||
+        Object.keys(res.patch.config ?? {}).length > 0
+      )
+      if (!hasChanges && !hasPatch) {
         setFixError(res.message ?? 'Nothing to fix — all data is already complete.')
         return
       }

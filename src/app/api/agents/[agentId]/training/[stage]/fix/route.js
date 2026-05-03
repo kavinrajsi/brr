@@ -20,44 +20,58 @@ function parseAnthropicJson(text) {
 // ─── Stage-specific fix prompt builders ──────────────────────────────────────
 
 function buildStage1Fix(brandName, config) {
-  const missing = []
-  const checks = {
-    tone:               'Tone of voice',
-    response_style:     'Response style',
-    promise:            'Brand promise / soul',
-    key_values:         'Core values',
-    prohibited_topics:  'Prohibited topics',
-    escalation_triggers:'Escalation triggers',
-    physique:           'Visual identity / physique',
-    tagline:            'Tagline or slogan',
-    target_audience:    'Target audience',
-    personality_traits: 'Character traits',
-  }
-  for (const [field, label] of Object.entries(checks)) {
-    if (!config[field]?.trim?.()) missing.push({ field, label })
-  }
+  const KEY_FIELDS = [
+    { field: 'physique',             label: 'Visual identity / physique' },
+    { field: 'tagline',              label: 'Tagline or slogan' },
+    { field: 'signature_products',   label: 'Signature products or services' },
+    { field: 'personality_traits',   label: 'Character traits' },
+    { field: 'tone',                 label: 'Tone of voice' },
+    { field: 'response_style',       label: 'Response style' },
+    { field: 'promise',              label: 'Brand promise / soul' },
+    { field: 'key_values',           label: 'Core values' },
+    { field: 'culture_beliefs',      label: 'Beliefs & principles' },
+    { field: 'culture_origin',       label: 'Origin & mission' },
+    { field: 'relationship_type',    label: 'Relationship type' },
+    { field: 'escalation_triggers',  label: 'Escalation triggers' },
+    { field: 'prohibited_topics',    label: 'Prohibited topics' },
+    { field: 'target_audience',      label: 'Target audience' },
+    { field: 'reflection_archetype', label: 'Customer archetype' },
+    { field: 'customer_values',      label: 'Customer values' },
+    { field: 'selfimage_feeling',    label: 'How customers feel' },
+    { field: 'selfimage_aspiration', label: 'Aspiration fulfilled' },
+    { field: 'response_guidelines',  label: 'AI response guidelines' },
+  ]
 
-  return `You are an expert brand strategist. Generate specific, realistic content to complete the missing brand configuration for "${brandName}".
+  const fieldSummary = KEY_FIELDS.map(({ field, label }) => {
+    const val = config[field]?.trim?.()
+    return `  ${label} (${field}): ${val ? `"${val}"` : 'EMPTY'}`
+  }).join('\n')
 
-Brand name: ${brandName}
-Already filled fields:
-${Object.entries(config).filter(([,v]) => v?.trim?.()).map(([k,v]) => `  ${k}: "${v}"`).join('\n') || '  (none)'}
+  return `You are an expert brand strategist improving the brand configuration for "${brandName}".
 
-Missing fields that need content:
-${missing.map(m => `  - ${m.label} (field: ${m.field})`).join('\n')}
+Current brand configuration:
+${fieldSummary}
 
-Generate realistic, specific content for each missing field based on what you know about "${brandName}".
-The content should be concise (1-3 sentences max per field), specific, and directly usable in brand AI training.
+Your task — for each field decide:
+1. If EMPTY: generate specific, realistic content based on the brand name and existing context
+2. If already filled but too short or generic (under 10 words, no specifics, placeholder-like): improve it with more actionable detail
+3. If already specific and complete: skip it — do not include it in changes
+
+Quality standards:
+- "prohibited_topics": must list concrete scenarios (e.g. "Do not discuss competitor pricing; do not make delivery guarantees; do not process refund requests on worn items")
+- "escalation_triggers": must include specific situations (e.g. "Order lost after 14 days; customer mentions chargeback or legal action; complaint about sizing on second purchase")
+- "tone": must describe voice with adjectives and examples, not just a single word
+- "escalation_triggers" and "prohibited_topics" together are the most important AI guardrails — make them very specific
 
 Respond ONLY with JSON in this exact format:
 {
-  "summary": "Brief description of what was generated",
+  "summary": "Brief description of what was improved or added",
   "changes": [
-    { "label": "Field label", "field": "field_key", "from": null, "to": "suggested content" }
+    { "label": "Field label", "field": "field_key", "from": "current value or null", "to": "improved content" }
   ],
   "patch": {
     "type": "brand_config",
-    "config": { "field_key": "suggested content" }
+    "config": { "field_key": "improved content" }
   }
 }`
 }
