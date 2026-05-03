@@ -316,10 +316,12 @@ export async function POST(req, { params }) {
     return Response.json({ error: 'AI fix is not available — ANTHROPIC_API_KEY is not configured' }, { status: 503 })
   }
 
-  const user = await getUserFromRequest(req)
+  const [user, body, { agentId, stage }] = await Promise.all([
+    getUserFromRequest(req),
+    req.json().catch(() => ({})),
+    params,
+  ])
   if (!user) return Response.json({ error: 'Unauthorized' }, { status: 401 })
-
-  const { agentId, stage } = await params
   const stageNum = parseInt(stage, 10)
   if (isNaN(stageNum) || stageNum < 1 || stageNum > 6) {
     return Response.json({ error: 'stage must be between 1 and 6' }, { status: 400 })
@@ -344,7 +346,6 @@ export async function POST(req, { params }) {
   const brandName         = owned.brands.name
   const brandId           = owned.brand_id
 
-  const body = await req.json().catch(() => ({}))
   const recommendations = Array.isArray(body?.recommendations) ? body.recommendations.slice(0, 5).map(String) : []
 
   const promptBuilders = {

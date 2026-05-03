@@ -26,8 +26,13 @@ export async function getUserFromRequest(req) {
   if (!token) return null
 
   const supabase = getAdminClient()
-  const { data: { user } } = await supabase.auth.getUser(token)
-  return user || null
+  try {
+    const { data: { user } } = await supabase.auth.getUser(token)
+    return user || null
+  } catch (err) {
+    console.error('[auth] getUser failed:', err?.message)
+    return null
+  }
 }
 
 // Sanitize DB errors before sending to clients.
