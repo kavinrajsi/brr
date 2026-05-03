@@ -586,7 +586,7 @@ function EvalResultPanel({ result, onDismiss, onFix }) {
         <div className="flex items-center gap-2">
           <ScoreBadge score={result.score} />
           <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${result.ready ? 'bg-green-50 text-green-700' : 'bg-amber-50 text-amber-700'}`}>
-            {result.ready ? 'Ready to advance' : 'Not yet ready'}
+            {result.ready ? 'AI: Ready to advance' : 'AI: Needs improvement'}
           </span>
         </div>
         <button onClick={onDismiss} className="text-slate-400 hover:text-slate-700" aria-label="Dismiss">
@@ -1060,7 +1060,7 @@ export default function StagePage() {
       {/* Stage-specific hints */}
       {num === 1 && !isComplete && (
         <Card className="mt-4 p-4 bg-blue-50 border-blue-200">
-          <p className="text-xs text-blue-800">All 5 checkpoints must be ticked to complete this stage.</p>
+          <p className="text-xs text-blue-800">All 5 checkpoints must be green to complete this stage. The AI score is advisory — it does not block completion.</p>
         </Card>
       )}
       {num === 2 && !isComplete && (
