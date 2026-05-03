@@ -10,14 +10,16 @@ async function getAuthToken() {
 export async function apiCall(endpoint, options = {}) {
   const token = await getAuthToken()
 
-  const response = await fetch(endpoint, {
-    ...options,
-    headers: {
-      ...options.headers,
-      Authorization: `Bearer ${token}`,
-      'Content-Type': 'application/json',
-    },
-  })
+  // Don't send "Authorization: Bearer undefined" when there's no session —
+  // some routes branch on the header's presence and would treat the literal
+  // string "undefined" as an invalid token instead of an unauthenticated call.
+  const headers = {
+    ...options.headers,
+    'Content-Type': 'application/json',
+  }
+  if (token) headers.Authorization = `Bearer ${token}`
+
+  const response = await fetch(endpoint, { ...options, headers })
 
   if (!response.ok) {
     const err = await response.json().catch(() => ({}))
@@ -34,6 +36,11 @@ export async function streamChat(agentId, message, onChunk, onDone, onError, con
     token = await getAuthToken()
   } catch (err) {
     onError?.(err instanceof Error ? err : new Error(String(err)))
+    return
+  }
+
+  if (!token) {
+    onError?.(new Error('Not signed in'))
     return
   }
 

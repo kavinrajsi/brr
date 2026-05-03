@@ -12,26 +12,46 @@ const STRATEGIES = {
 class SmartCache {
   constructor() {
     this.cache = new Map()
+    this.timers = new Map() // key → timeoutId, so we can cancel on overwrite/delete
     this.hits = 0
     this.misses = 0
     this.evictions = 0
+  }
+
+  // Cancel any pending eviction timer for `key` so a re-set doesn't get
+  // wiped out by the previous set's timer firing (the original double-eviction bug).
+  _cancelTimer(key) {
+    const t = this.timers.get(key)
+    if (t) {
+      clearTimeout(t)
+      this.timers.delete(key)
+    }
   }
 
   set(key, value, strategy = 'default') {
     const ttl = STRATEGIES[strategy] ?? STRATEGIES.default
     if (ttl === 0) return
 
+    this._cancelTimer(key)
+
     const expiresAt = Date.now() + ttl
     this.cache.set(key, { value, expiresAt, strategy, hitCount: 0, created: Date.now() })
-    setTimeout(() => {
+
+    // .unref() so a pending timer doesn't keep a worker process alive past
+    // its natural shutdown (matters for tests / cold starts).
+    const timer = setTimeout(() => {
       this.cache.delete(key)
+      this.timers.delete(key)
       this.evictions++
     }, ttl)
+    if (typeof timer.unref === 'function') timer.unref()
+    this.timers.set(key, timer)
   }
 
   get(key) {
     const item = this.cache.get(key)
     if (!item || Date.now() > item.expiresAt) {
+      if (item) this._cancelTimer(key)
       this.cache.delete(key)
       this.misses++
       return null
@@ -42,10 +62,13 @@ class SmartCache {
   }
 
   delete(key) {
+    this._cancelTimer(key)
     this.cache.delete(key)
   }
 
   clear() {
+    for (const t of this.timers.values()) clearTimeout(t)
+    this.timers.clear()
     this.cache.clear()
     this.hits = 0
     this.misses = 0

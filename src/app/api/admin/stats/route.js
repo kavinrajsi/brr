@@ -21,15 +21,15 @@ export async function GET(req) {
     { count: totalConversations },
     { data: { users } = {} },
   ] = await Promise.all([
-    supabase.from('subscriptions').select('*', { count: 'exact', head: true }),
-    supabase.from('brands').select('*', { count: 'exact', head: true }),
-    supabase.from('agents').select('*', { count: 'exact', head: true }),
-    supabase.from('agents').select('*', { count: 'exact', head: true }).eq('status', 'Training'),
-    supabase.from('agents').select('*', { count: 'exact', head: true }).eq('status', 'Certified'),
-    supabase.from('agents').select('*', { count: 'exact', head: true }).eq('status', 'Deployed'),
-    supabase.from('organizations').select('*', { count: 'exact', head: true }),
-    supabase.from('test_scenarios').select('*', { count: 'exact', head: true }),
-    supabase.from('agent_conversations').select('*', { count: 'exact', head: true }),
+    supabase.from('subscriptions').select('*', { count: 'estimated', head: true }),
+    supabase.from('brands').select('*', { count: 'estimated', head: true }),
+    supabase.from('agents').select('*', { count: 'estimated', head: true }),
+    supabase.from('agents').select('*', { count: 'estimated', head: true }).eq('status', 'Training'),
+    supabase.from('agents').select('*', { count: 'estimated', head: true }).eq('status', 'Certified'),
+    supabase.from('agents').select('*', { count: 'estimated', head: true }).eq('status', 'Deployed'),
+    supabase.from('organizations').select('*', { count: 'estimated', head: true }),
+    supabase.from('test_scenarios').select('*', { count: 'estimated', head: true }),
+    supabase.from('agent_conversations').select('*', { count: 'estimated', head: true }),
     supabase.auth.admin.listUsers({ perPage: 1 }), // for total users count via metadata
   ])
 

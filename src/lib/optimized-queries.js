@@ -30,14 +30,20 @@ export async function getBrandWithConfig(brandId, userId) {
   return { brand: brandRes.data, config: configRes.data }
 }
 
-export async function getAgentsByBrand(brandId) {
+// Require userId so callers can't accidentally hand out cross-tenant agents.
+// The brands!inner join short-circuits the query if the brand isn't owned
+// by this user (returns []), so there's no information leak.
+export async function getAgentsByBrand(brandId, userId) {
+  if (!userId) throw new Error('getAgentsByBrand: userId is required')
   const supabase = getAdminClient()
   const { data, error } = await supabase
     .from('agents')
-    .select('id, name, status, current_stage, created_at')
+    .select('id, name, status, current_stage, created_at, brands!inner(user_id)')
     .eq('brand_id', brandId)
+    .eq('brands.user_id', userId)
     .order('created_at', { ascending: false })
 
   if (error) throw error
-  return data
+  // Strip the join column from the response
+  return (data ?? []).map(({ brands, ...agent }) => agent)
 }
