@@ -12,12 +12,21 @@ import Link from 'next/link'
 
 // ─── Stage 1: Onboarding ────────────────────────────────────────────────────
 
+// Brand config fields are JSONB — values can be string, array, object, etc. Treat any non-empty value as "filled".
+function isFilled(v) {
+  if (v == null) return false
+  if (typeof v === 'string') return v.trim().length > 0
+  if (Array.isArray(v)) return v.some(item => isFilled(item))
+  if (typeof v === 'object') return Object.keys(v).length > 0
+  return Boolean(v)
+}
+
 const ONBOARDING_CHECKS = [
   {
     id: 'brand_name',
     label: 'Brand name and identity confirmed',
     hint: 'Set your brand name and short name when creating the brand.',
-    verify: (brand, cfg) => !!(brand?.name?.trim() && brand?.short_name?.trim()),
+    verify: (brand) => isFilled(brand?.name) && isFilled(brand?.short_name),
   },
   {
     id: 'brr_complete',
@@ -32,26 +41,26 @@ const ONBOARDING_CHECKS = [
         ['target_audience', 'reflection_archetype', 'customer_values'],
         ['selfimage_feeling', 'selfimage_aspiration'],
       ]
-      return facets.every(fields => fields.some(f => cfg?.[f]?.trim?.()))
+      return facets.every(fields => fields.some(f => isFilled(cfg?.[f])))
     },
   },
   {
     id: 'tone_defined',
     label: 'Tone of voice and personality defined',
     hint: 'Fill in Tone of Voice and Response Style in Configure Brand → Personality.',
-    verify: (brand, cfg) => !!(cfg?.tone?.trim() && cfg?.response_style?.trim()),
+    verify: (brand, cfg) => isFilled(cfg?.tone) && isFilled(cfg?.response_style),
   },
   {
     id: 'promise_set',
     label: 'Core promise and brand soul established',
     hint: 'Fill in Brand Promise and Core Values in Configure Brand → Culture.',
-    verify: (brand, cfg) => !!(cfg?.promise?.trim() && cfg?.key_values?.trim()),
+    verify: (brand, cfg) => isFilled(cfg?.promise) && isFilled(cfg?.key_values),
   },
   {
     id: 'non_negotiables',
     label: 'Non-negotiables and restrictions documented',
     hint: 'Fill in Prohibited Topics and Escalation Triggers in Configure Brand → Relationship.',
-    verify: (brand, cfg) => !!(cfg?.prohibited_topics?.trim() && cfg?.escalation_triggers?.trim()),
+    verify: (brand, cfg) => isFilled(cfg?.prohibited_topics) && isFilled(cfg?.escalation_triggers),
   },
 ]
 
