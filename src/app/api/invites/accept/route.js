@@ -1,5 +1,6 @@
+import { createHash } from 'crypto'
 import { getUserFromRequest, getAdminClient, dbError } from '@/lib/supabase-server'
-import { logAuditAction } from '@/lib/permissions'
+import { logAuditAction, invalidateRoleCache } from '@/lib/permissions'
 import { checkRateLimit } from '@/lib/rate-limiter'
 
 export async function POST(req) {
@@ -13,11 +14,14 @@ export async function POST(req) {
   const { token } = await req.json()
   if (!token) return Response.json({ error: 'token is required' }, { status: 400 })
 
+  // The DB only stores SHA-256 of the token (since the hashing migration).
+  const tokenHash = createHash('sha256').update(token).digest('hex')
+
   const supabase = getAdminClient()
   const { data: invite, error: inviteErr } = await supabase
     .from('organization_invites')
     .select('*')
-    .eq('token', token)
+    .eq('token', tokenHash)
     .single()
 
   if (inviteErr || !invite) {
@@ -61,6 +65,9 @@ export async function POST(req) {
   await logAuditAction(invite.organization_id, user.id, 'member_joined_via_invite', {
     type: 'invite', id: invite.id,
   })
+
+  // Bust the in-memory role cache so the new membership takes effect immediately
+  invalidateRoleCache(user.id)
 
   return Response.json({ organizationId: invite.organization_id, role: invite.role })
 }

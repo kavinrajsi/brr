@@ -1,14 +1,6 @@
 import { getUserFromRequest, getAdminClient, dbError } from '@/lib/supabase-server'
-
-async function assertBrandOwner(supabase, brandId, userId) {
-  const { data } = await supabase
-    .from('brands')
-    .select('id')
-    .eq('id', brandId)
-    .eq('user_id', userId)
-    .single()
-  return data || null
-}
+import { assertBrandOwner } from '@/lib/permissions'
+import { validateWebhookUrl } from '@/lib/webhook'
 
 export async function GET(req, { params }) {
   const user = await getUserFromRequest(req)
@@ -45,6 +37,14 @@ export async function PUT(req, { params }) {
   if (!owned) return Response.json({ error: 'Brand not found' }, { status: 404 })
 
   const { config } = await req.json()
+
+  // SSRF guard: reject internal/private webhook URLs at save time, not at fire time
+  if (config?.webhook_url && String(config.webhook_url).trim()) {
+    const validation = validateWebhookUrl(String(config.webhook_url).trim())
+    if (!validation.ok) {
+      return Response.json({ error: validation.error }, { status: 400 })
+    }
+  }
 
   const { data: existing } = await supabase
     .from('brand_configs')

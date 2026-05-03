@@ -24,6 +24,27 @@ export async function POST(req) {
     const { userId, planId } = session.metadata ?? {}
     if (!userId || !planId) return new Response('OK')
 
+    // Defence in depth: never trust metadata blindly. A compromised checkout-
+    // creation path could spoof userId. Cross-check it against the user record
+    // by email before granting the subscription.
+    const claimedEmail = session.customer_details?.email ?? session.customer_email
+    if (claimedEmail) {
+      const { data: { user: actualUser } = {} } = await supabase.auth.admin.getUserById(userId)
+      if (!actualUser) {
+        console.warn(JSON.stringify({
+          level: 'warn', event: 'webhook_user_not_found', userId, claimedEmail, sessionId: session.id,
+        }))
+        return new Response('OK')
+      }
+      if (actualUser.email?.toLowerCase() !== claimedEmail.toLowerCase()) {
+        console.warn(JSON.stringify({
+          level: 'warn', event: 'webhook_email_mismatch',
+          metadataUserId: userId, actualEmail: actualUser.email, claimedEmail, sessionId: session.id,
+        }))
+        return new Response('OK')
+      }
+    }
+
     await supabase.from('subscriptions').upsert([{
       user_id: userId,
       plan: planId,

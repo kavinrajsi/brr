@@ -1,7 +1,13 @@
-import { randomBytes } from 'crypto'
+import { randomBytes, createHash } from 'crypto'
 import { getUserFromRequest, getAdminClient, dbError } from '@/lib/supabase-server'
 import { hasPermission, logAuditAction } from '@/lib/permissions'
 import { checkRateLimit } from '@/lib/rate-limiter'
+
+// Tokens are returned in plaintext one time only; the DB stores SHA-256(token).
+// Verification compares hashes — same pattern as agent_api_keys.
+function hashToken(raw) {
+  return createHash('sha256').update(raw).digest('hex')
+}
 
 export async function GET(req, { params }) {
   const user = await getUserFromRequest(req)
@@ -45,6 +51,7 @@ export async function POST(req, { params }) {
   }
 
   const token = randomBytes(32).toString('hex')
+  const tokenHash = hashToken(token)
   const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString() // 7 days
 
   const supabase = getAdminClient()
@@ -55,10 +62,10 @@ export async function POST(req, { params }) {
       email: email.trim().toLowerCase(),
       role,
       invited_by: user.id,
-      token,
+      token: tokenHash,
       expires_at: expiresAt,
     }])
-    .select()
+    .select('id, email, role, expires_at, accepted_at, created_at, organization_id')
     .single()
 
   if (error) return dbError(error)
@@ -67,7 +74,9 @@ export async function POST(req, { params }) {
     type: 'invite', id: data.id, changes: { email, role },
   })
 
-  return Response.json({ invite: data }, { status: 201 })
+  // Return the plaintext token ONCE so the caller can build the invite URL.
+  // After this response it is unrecoverable — only the hash lives in the DB.
+  return Response.json({ invite: data, token }, { status: 201 })
 }
 
 export async function DELETE(req, { params }) {

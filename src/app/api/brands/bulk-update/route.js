@@ -64,7 +64,9 @@ export async function POST(req) {
       results.push({ id, status: 'success', data })
       successful++
     } catch (err) {
-      results.push({ id, status: 'failed', error: err.message })
+      // Log internals server-side, return a generic message to the client
+      console.error('[bulk-update]', id, err?.message)
+      results.push({ id, status: 'failed', error: 'Update failed' })
       failed++
     }
   }

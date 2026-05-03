@@ -25,6 +25,26 @@ export async function POST(req) {
     return Response.json({ error: 'You do not own all specified brands' }, { status: 403 })
   }
 
+  // Cascade in the same order as the single-brand DELETE in [brandId]/route.js,
+  // otherwise FK constraints fail or orphan rows accumulate.
+  const { data: agents } = await supabase
+    .from('agents')
+    .select('id')
+    .in('brand_id', brandIds)
+
+  const agentIds = (agents ?? []).map(a => a.id)
+
+  if (agentIds.length > 0) {
+    await supabase.from('agent_api_keys').delete().in('agent_id', agentIds)
+    await supabase.from('training_progress').delete().in('agent_id', agentIds)
+    await supabase.from('agent_conversations').delete().in('agent_id', agentIds)
+    await supabase.from('agents').delete().in('id', agentIds)
+  }
+
+  await supabase.from('brand_configs').delete().in('brand_id', brandIds)
+  await supabase.from('brand_knowledge').delete().in('brand_id', brandIds)
+  await supabase.from('test_scenarios').delete().in('brand_id', brandIds)
+
   const { error } = await supabase.from('brands').delete().in('id', brandIds)
   if (error) return dbError(error)
 
