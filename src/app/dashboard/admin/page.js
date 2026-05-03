@@ -41,9 +41,14 @@ export default function AdminPage() {
           <h1 className="text-3xl font-bold text-slate-900">Admin</h1>
           <p className="text-slate-600 mt-2">Overview of your account activity</p>
         </div>
-        <Link href="/dashboard/admin/audit">
-          <Button variant="outline">View Audit Logs</Button>
-        </Link>
+        <div className="flex gap-2">
+          <Link href="/dashboard/admin/users">
+            <Button variant="outline">Users & Payments</Button>
+          </Link>
+          <Link href="/dashboard/admin/audit">
+            <Button variant="outline">View Audit Logs</Button>
+          </Link>
+        </div>
       </div>
 
       {error && (

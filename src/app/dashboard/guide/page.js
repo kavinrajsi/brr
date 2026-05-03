@@ -209,7 +209,7 @@ function StepCard({ step, title, body, code, link, linkLabel }) {
 
 export default function GuidePage() {
   return (
-    <div className="max-w-3xl">
+    <div className="w-full">
       <div className="mb-10">
         <h1 className="text-3xl font-bold text-slate-900">Guide</h1>
         <p className="text-slate-600 mt-2">Everything you need to train and deploy brand-certified AI agents</p>
