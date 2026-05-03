@@ -4,7 +4,6 @@ import { useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { useAuth } from '@/contexts/AuthContext'
 import { DashboardHeader } from '@/components/common/Header'
-import { DashboardSidebar } from '@/components/common/Sidebar'
 
 export default function DashboardLayout({ children }) {
   const router = useRouter()
@@ -30,14 +29,11 @@ export default function DashboardLayout({ children }) {
   if (!user) return null
 
   return (
-    <div className="flex h-screen bg-slate-100">
-      <DashboardSidebar />
-      <div className="flex-1 flex flex-col overflow-hidden">
-        <DashboardHeader />
-        <main className="flex-1 overflow-auto p-6">
-          {children}
-        </main>
-      </div>
+    <div className="flex flex-col min-h-screen bg-slate-100">
+      <DashboardHeader />
+      <main className="flex-1 p-6 max-w-7xl mx-auto w-full">
+        {children}
+      </main>
     </div>
   )
 }
