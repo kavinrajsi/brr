@@ -13,7 +13,7 @@
     "smoke:stage2": "node scripts/smoke-stage2.mjs"
   },
   "dependencies": {
-    "@anthropic-ai/sdk": "^0.92.0",
+    "@anthropic-ai/sdk": "^0.105.0",
     "@base-ui/react": "^1.4.1",
     "@hookform/resolvers": "^5.2.2",
     "@supabase/supabase-js": "^2.105.1",
